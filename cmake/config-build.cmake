@@ -9,6 +9,7 @@ option(RTS_BUILD_OPTION_DEBUG "Build code with the \"Debug\" configuration." OFF
 option(RTS_BUILD_OPTION_ASAN "Build code with Address Sanitizer." OFF)
 option(RTS_BUILD_OPTION_VC6_FULL_DEBUG "Build VC6 with full debug info." OFF)
 option(RTS_BUILD_OPTION_FFMPEG "Enable FFmpeg support" OFF)
+option(RTS_WASM_SUPPRESS_WARNING_NOISE "Suppress high-volume non-fatal warnings in Emscripten builds" ON)
 
 # Linux/SDL3 and OpenAL options (Phase 1 Linux port)
 option(SAGE_USE_SDL3 "Use SDL3 for windowing/input (Linux/macOS)" OFF)
@@ -44,6 +45,7 @@ add_feature_info(DebugBuild RTS_BUILD_OPTION_DEBUG "Building as a \"Debug\" buil
 add_feature_info(AddressSanitizer RTS_BUILD_OPTION_ASAN "Building with address sanitizer")
 add_feature_info(Vc6FullDebug RTS_BUILD_OPTION_VC6_FULL_DEBUG "Building VC6 with full debug info")
 add_feature_info(FFmpegSupport RTS_BUILD_OPTION_FFMPEG "Building with FFmpeg support")
+add_feature_info(WasmWarningNoiseSuppression RTS_WASM_SUPPRESS_WARNING_NOISE "Suppress noisy warnings in Emscripten builds")
 add_feature_info(SDL3Windowing SAGE_USE_SDL3 "Using SDL3 for windowing (Linux)")
 add_feature_info(OpenALAudio SAGE_USE_OPENAL "Using OpenAL for audio (Linux)")
 add_feature_info(UpdateCheck SAGE_UPDATE_CHECK "In-game update check via GitHub Releases API")
@@ -89,10 +91,31 @@ endif()
 
 if(UNIX)
     target_compile_definitions(core_config INTERFACE _UNIX)
-    # Ubuntu 24.04+ and macOS have strlcpy/strlcat/wcslcpy/wcslcat in libc
-    # GeneralsX @TheSuperHackers @build BenderAI 11/02/2026 Added guards for glibc 2.38+
-    target_compile_definitions(core_config INTERFACE 
-        HAVE_STRLCPY HAVE_STRLCAT HAVE_WCSLCPY HAVE_WCSLCAT)
+    # Ubuntu 24.04+ and macOS have strlcpy/strlcat/wcslcpy/wcslcat in libc.
+    # Emscripten's libc may not expose wcslcpy/wcslcat, so keep project fallbacks enabled there.
+    if(EMSCRIPTEN)
+        target_compile_definitions(core_config INTERFACE HAVE_STRLCPY HAVE_STRLCAT)
+    else()
+        target_compile_definitions(core_config INTERFACE 
+            HAVE_STRLCPY HAVE_STRLCAT HAVE_WCSLCPY HAVE_WCSLCAT)
+    endif()
+
+    if(EMSCRIPTEN AND RTS_WASM_SUPPRESS_WARNING_NOISE)
+        # Keep wasm bring-up logs readable by suppressing known legacy warning floods.
+        target_compile_options(core_config INTERFACE
+            -Wno-suggest-override
+            -Wno-new-returns-null
+            -Wno-switch
+            -Wno-macro-redefined
+            -Wno-logical-not-parentheses
+            -Wno-ambiguous-reversed-operator
+            -Wno-invalid-offsetof
+            -Wno-deprecated-enum-float-conversion
+            -Wno-delete-incomplete
+            -Wno-implicit-exception-spec-mismatch
+        )
+    endif()
+
 endif()
 
 if(RTS_BUILD_OPTION_DEBUG)

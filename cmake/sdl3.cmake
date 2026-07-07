@@ -30,8 +30,16 @@ if(SAGE_USE_SDL3)
     )
     
     # Configure SDL3 build options
-    set(SDL_SHARED ON CACHE BOOL "Build SDL3 as shared library" FORCE)
-    set(SDL_STATIC OFF CACHE BOOL "Don't build static library" FORCE)
+    # Emscripten cannot produce/load shared SDL the same way native targets do,
+    # so force static there to avoid SDL's "both disabled" configure failure.
+    if(EMSCRIPTEN)
+        set(SDL_SHARED OFF CACHE BOOL "Disable SDL3 shared library for Emscripten" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "Build SDL3 static library for Emscripten" FORCE)
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "Prefer static libs for Emscripten scope build" FORCE)
+    else()
+        set(SDL_SHARED ON CACHE BOOL "Build SDL3 as shared library" FORCE)
+        set(SDL_STATIC OFF CACHE BOOL "Don't build static library" FORCE)
+    endif()
     set(SDL_AUDIO ON CACHE BOOL "Enable audio subsystem" FORCE)
     set(SDL_TIMERS ON CACHE BOOL "Enable timers" FORCE)
     set(SDL_EVENTS ON CACHE BOOL "Enable events" FORCE)
@@ -46,12 +54,23 @@ if(SAGE_USE_SDL3)
     set(SDL_QSPI OFF CACHE BOOL "Disable QSPI (unused)" FORCE)
     
     FetchContent_MakeAvailable(SDL3)
+
+    if(EMSCRIPTEN AND TARGET SDL3-static)
+        # Ubuntu's apt emscripten (3.1.6) lacks EM_JS_DEPS used by newer SDL3 sources.
+        # Inject a no-op compatibility macro so SDL can compile in scope builds.
+        set(SDL3_EMSCRIPTEN_COMPAT_HEADER "${CMAKE_BINARY_DIR}/sdl3_emscripten_compat.h")
+        file(WRITE "${SDL3_EMSCRIPTEN_COMPAT_HEADER}" "#ifndef EM_JS_DEPS\n#define EM_JS_DEPS(name, deps)\n#endif\n")
+        target_compile_options(SDL3-static PRIVATE "-include" "${SDL3_EMSCRIPTEN_COMPAT_HEADER}")
+    endif()
     
     # GeneralsX @bugfix BenderAI 22/02/2026 (updated 24/02/2026 for macOS)
     # Before SDL3_image build: force PNG discovery to platform-specific libpng
     # Linux: System libpng16.so is dynamic shared library
     # macOS: Use Homebrew PNG or system framework
-    if(NOT APPLE)
+    # Emscripten: don't force host PNG discovery; SDL3_image config is handled separately.
+    if(EMSCRIPTEN)
+        message(STATUS "Emscripten target detected: skipping host PNG discovery for SDL3_image")
+    elseif(NOT APPLE)
         # Find system shared libpng, bypassing vcpkg's static .a.
         # SDL3_image requires a shared .so but vcpkg only provides static libpng16.a.
         # NO_CMAKE_PATH + NO_CMAKE_FIND_ROOT_PATH skips all vcpkg-injected search paths,
@@ -114,8 +133,23 @@ if(SAGE_USE_SDL3)
     set(SDL3IMAGE_WEBP ON CACHE BOOL "Enable WebP support" FORCE)
     set(SDL3IMAGE_AVIF OFF CACHE BOOL "Disable AVIF (optional)" FORCE)
     set(SDL3IMAGE_XCUR ON CACHE BOOL "Enable X cursor support" FORCE)
+
+    if(EMSCRIPTEN)
+        # Browser scoping build: avoid host codec discovery pitfalls during cross-configure.
+        set(SDL3IMAGE_DEPS_SHARED OFF CACHE BOOL "Disable shared dep lookup for Emscripten" FORCE)
+        set(SDL3IMAGE_JPG OFF CACHE BOOL "Disable JPG for Emscripten scope build" FORCE)
+        set(SDL3IMAGE_PNG OFF CACHE BOOL "Disable PNG for Emscripten scope build" FORCE)
+        set(SDL3IMAGE_TIF OFF CACHE BOOL "Disable TIF for Emscripten scope build" FORCE)
+        set(SDL3IMAGE_WEBP OFF CACHE BOOL "Disable WebP for Emscripten scope build" FORCE)
+        set(SDL3IMAGE_XCUR OFF CACHE BOOL "Disable X cursor support for Emscripten" FORCE)
+    endif()
     
     FetchContent_MakeAvailable(SDL3_image)
+
+    if(EMSCRIPTEN AND TARGET SDL3_image-static)
+        # Older emscripten/clang combinations can miss stdlib declarations in SDL3_image C sources.
+        target_compile_options(SDL3_image-static PRIVATE "-include" "stdlib.h")
+    endif()
     
     # Create unified interface library for linking
     add_library(sdl3lib INTERFACE)

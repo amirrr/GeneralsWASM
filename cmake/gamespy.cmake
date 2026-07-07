@@ -8,3 +8,15 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(gamespy)
+
+if(EMSCRIPTEN)
+    # GameSpy SDK only checks Linux/macOS/Windows platform macros.
+    # For wasm scope builds, route through its UNIX code path.
+    foreach(gs_target
+        gscommon gscdkey gshttp gsgp gsgstats gsgt2 gsnatneg gspeer gspinger
+        gspt gsqr gsqr2 gssake gssc gsserverbrowsing gswebservices gsvoice2 gschat)
+        if(TARGET ${gs_target})
+            target_compile_definitions(${gs_target} PUBLIC _UNIX _LINUX __linux__)
+        endif()
+    endforeach()
+endif()

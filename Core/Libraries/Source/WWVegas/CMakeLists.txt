@@ -31,7 +31,9 @@ target_include_directories(core_wwcommon INTERFACE
 )
 
 add_subdirectory(WW3D2)
-add_subdirectory(WWAudio)
+if(NOT EMSCRIPTEN)
+    add_subdirectory(WWAudio)
+endif()
 add_subdirectory(WWDebug)
 add_subdirectory(WWDownload)
 add_subdirectory(WWLib)

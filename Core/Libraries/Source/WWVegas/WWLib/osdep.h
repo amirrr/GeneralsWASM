@@ -25,20 +25,20 @@ typedef wchar_t WCHAR;
 #define lstrcpyn strncpy    // GeneralsX @build BenderAI 10/02/2026 - String copy with length
 #define lstrcat strcat      // GeneralsX @build BenderAI 10/02/2026 - String concatenation
 
-// GeneralsX @TheSuperHackers @build BenderAI 11/02/2026 Only define strupr/strrev if not already provided by compat headers
-// Note: Check for macro definition, not function existence
+// GeneralsX @bugfix GitHubCopilot 07/07/2026 Avoid header-level symbol conflicts on Emscripten by aliasing to local helpers
 #if !defined(strupr)
-static char *strupr(char *str)
+static inline char *generalsx_strupr(char *str)
 {
     for (int i = 0; i < strlen(str); i++)
         str[i] = toupper(str[i]);
 
     return str;
 }
+#define strupr generalsx_strupr
 #endif
 
 #if !defined(strrev)
-static char *strrev(char *str)
+static inline char *generalsx_strrev(char *str)
 {
     if (!str || ! *str)
         return str;
@@ -56,6 +56,7 @@ static char *strrev(char *str)
     }
     return str;
 }
+#define strrev generalsx_strrev
 #endif
 
 #endif // _UNIX

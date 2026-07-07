@@ -1200,7 +1200,7 @@ FontCharsClass::~FontCharsClass ()
 
 #if defined(SAGE_USE_FREETYPE) && !defined(_WIN32)
 	Free_Freetype_Font();
-#else
+#elif defined(_WIN32)
 	Free_GDI_Font();
 #endif
 	Free_Character_Arrays();
@@ -1242,8 +1242,22 @@ FontCharsClass::Get_Char_Data (WCHAR ch)
 	if ( retval == nullptr ) {
 #if defined(SAGE_USE_FREETYPE) && !defined(_WIN32)
 		retval = Store_Freetype_Char( glyph );
-#else
+#elif defined(_WIN32)
 		retval = Store_GDI_Char( glyph );
+#else
+		// GeneralsX @build GitHubCopilot 07/07/2026 Emscripten scope fallback: keep glyph metrics valid without desktop font backends.
+		FontCharsClassCharDataStruct *char_data = W3DNEW FontCharsClassCharDataStruct;
+		char_data->Value = glyph;
+		char_data->Width = 0;
+		char_data->Buffer = nullptr;
+
+		if ( normalized_char < 256 ) {
+			ASCIICharArray[normalized_char] = char_data;
+		} else {
+			UnicodeCharArray[normalized_char - FirstUnicodeChar] = char_data;
+		}
+
+		retval = char_data;
 #endif
 	}
 
@@ -1977,8 +1991,15 @@ FontCharsClass::Initialize_GDI_Font (const char *font_name, int point_size, bool
 	//
 #if defined(SAGE_USE_FREETYPE) && !defined(_WIN32)
 	return Create_Freetype_Font (font_name);
-#else
+#elif defined(_WIN32)
 	return Create_GDI_Font (font_name);
+#else
+	// GeneralsX @build GitHubCopilot 07/07/2026 Emscripten scope fallback: initialize neutral metrics when no native font backend is enabled.
+	PixelOverlap = 0;
+	CharOverhang = 0;
+	CharHeight = PointSize > 0 ? PointSize : 12;
+	CharAscent = CharHeight;
+	return true;
 #endif
 }
 

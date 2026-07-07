@@ -177,7 +177,16 @@ void SubsystemInterfaceList::initSubsystem(SubsystemInterface* sys, const char* 
 	if (path1) {
 		fprintf(stderr, "[SUBSYS] initSubsystem('%s') - loadFileDirectory('%s') START\n", name.str(), path1);
 		fflush(stderr);
-		ini.loadFileDirectory(path1, INI_LOAD_OVERWRITE, pXfer );
+		// GeneralsX @bugfix 07/07/2026 path1 is the optional "Default" override layer.
+		// On some installs (and incomplete data sets) the Default override directory is
+		// empty, in which case loadFileDirectory throws INI_CANT_OPEN_FILE. That is not
+		// fatal: the authoritative data is loaded from path2 below. Tolerate an empty
+		// Default override so initialization can proceed. path2 remains strict.
+		try {
+			ini.loadFileDirectory(path1, INI_LOAD_OVERWRITE, pXfer );
+		} catch (...) {
+			fprintf(stderr, "[SUBSYS] initSubsystem('%s') - optional default override '%s' missing/empty, continuing.\n", name.str(), path1);
+		}
 		fprintf(stderr, "[SUBSYS] initSubsystem('%s') - loadFileDirectory('%s') DONE\n", name.str(), path1);
 		fflush(stderr);
 	}

@@ -50,17 +50,17 @@ public:
 	virtual ~SDL3Mouse(void);
 
 	// SubsystemInterface
-	virtual void init(void);
-	virtual void reset(void);
-	virtual void update(void);
+	virtual void init(void) override;
+	virtual void reset(void) override;
+	virtual void update(void) override;
 	virtual void draw(void) override;
-	virtual void initCursorResources(void);
+	virtual void initCursorResources(void) override;
 
 	// Mouse interface
-	virtual void setCursor(MouseCursor cursor);
-	virtual void setVisibility(Bool visible);
-	virtual void loseFocus();
-	virtual void regainFocus();
+	virtual void setCursor(MouseCursor cursor) override;
+	virtual void setVisibility(Bool visible) override;
+	virtual void loseFocus() override;
+	virtual void regainFocus() override;
 
 	// SDL3-specific methods
 	// Fighter19 pattern: addSDLEvent() accepts raw SDL_Event directly
@@ -73,9 +73,9 @@ public:
 	void addSDL3MouseWheelEvent(const SDL_MouseWheelEvent& event);
 
 protected:
-	virtual void capture(void);
-	virtual void releaseCapture(void);
-	virtual UnsignedByte getMouseEvent(MouseIO *result, Bool flush);
+	virtual void capture(void) override;
+	virtual void releaseCapture(void) override;
+	virtual UnsignedByte getMouseEvent(MouseIO *result, Bool flush) override;
 
 private:
 	// Event translation from SDL_Event (raw format)

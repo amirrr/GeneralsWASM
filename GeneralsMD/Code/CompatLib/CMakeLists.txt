@@ -23,11 +23,24 @@ if(NOT SAGE_USE_GLM)
     message(FATAL_ERROR "GLM is required for d3dx8 compatibility layer")
 endif()
 
-find_package(glm CONFIG REQUIRED)
-target_link_libraries(d3dx8 PUBLIC glm::glm)
+if(EMSCRIPTEN)
+    # Emscripten scope builds don't use vcpkg package config.
+    # Pull GLM directly so d3dx8 compatibility code can compile.
+    include(FetchContent)
+    FetchContent_Declare(
+        glm
+        GIT_REPOSITORY https://github.com/g-truc/glm.git
+        GIT_TAG 1.0.1
+    )
+    FetchContent_MakeAvailable(glm)
+    target_link_libraries(d3dx8 PUBLIC glm::glm)
+else()
+    find_package(glm CONFIG REQUIRED)
+    target_link_libraries(d3dx8 PUBLIC glm::glm)
+endif()
 
 # GeneralsX @build felipebraz 20/06/2025 GLI causes make_vec4 ambiguity with Apple Clang - only link on Windows
-if(NOT APPLE)
+if(NOT APPLE AND NOT EMSCRIPTEN)
     find_package(gli CONFIG REQUIRED)
     target_link_libraries(d3dx8 PUBLIC gli)
 endif()

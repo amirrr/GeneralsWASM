@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(EMSCRIPTEN)
 #include <malloc.h>
 #elif __APPLE__
 #include <malloc/malloc.h>
@@ -24,6 +24,9 @@ static void GlobalFree(void *ptr)
 static size_t GlobalSize(void *ptr)
 {
 #ifdef __linux__
+  return malloc_usable_size(ptr);
+#elif defined(EMSCRIPTEN)
+  // GeneralsX @build GitHubCopilot 07/07/2026 Emscripten libc provides malloc_usable_size via malloc.h
   return malloc_usable_size(ptr);
 #elif defined(__APPLE__)
   return malloc_size(ptr);

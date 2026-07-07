@@ -448,6 +448,20 @@ UnicodeString Version::buildUnicodeGitCommitTime()
 	UnicodeString str;
 	WideChar* buf = str.getBufferForRead(len);
 	tm* time = gmtime(&GitCommitTimeStamp);
+	// GeneralsX @build 07/07/2026 Emscripten's libc does not provide wcsftime.
+	// Format with the narrow strftime and widen manually for wasm.
+#ifdef __EMSCRIPTEN__
+	{
+		char narrow[32] = {0};
+		strftime(narrow, sizeof(narrow), "%Y-%m-%d %H:%M:%S", time);
+		Int i = 0;
+		for (; i < len && narrow[i] != '\0'; ++i) {
+			buf[i] = (WideChar)(unsigned char)narrow[i];
+		}
+		buf[i] = (WideChar)0;
+	}
+#else
 	wcsftime(buf, len+1, L"%Y-%m-%d %H:%M:%S", time);
+#endif
 	return str;
 }

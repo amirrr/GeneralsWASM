@@ -246,6 +246,26 @@ int main(int argc, char* argv[])
 	fprintf(stderr, " SDL3 + DXVK Build\n");
 	fprintf(stderr, "=================================================\n\n");
 
+	// GeneralsX @build 07/07/2026 WASM bring-up: prove main() executes in the browser.
+	// The browser has no Vulkan/DXVK, so the Vulkan window path below is skipped for wasm.
+	// This banner is the first observable signal that the C++ entry point actually ran.
+#ifdef __EMSCRIPTEN__
+	fprintf(stderr, "[WASM] main() entered (argc=%d). Browser bring-up mode.\n", argc);
+	// GeneralsX @build 07/07/2026 The engine scans the current working directory for
+	// *.big archives via std::filesystem. Ensure cwd is the FS root where the launcher
+	// mounted the BIG files, otherwise no archives are indexed and INI loading fails.
+	{
+		if (chdir("/") != 0) {
+			fprintf(stderr, "[WASM] WARNING: chdir(\"/\") failed.\n");
+		}
+		char cwdbuf[256] = {0};
+		if (getcwd(cwdbuf, sizeof(cwdbuf))) {
+			fprintf(stderr, "[WASM] cwd is now: %s\n", cwdbuf);
+		}
+	}
+	fflush(stderr);
+#endif
+
 	try {
 		// Initialize critical sections (required by game engine)
 		TheAsciiStringCriticalSection = &critSec1;
@@ -284,6 +304,22 @@ int main(int argc, char* argv[])
 				return 1;
 			}
 
+			// GeneralsX @build 07/07/2026 WASM: browsers have no Vulkan. Skip DXVK/Vulkan
+			// setup and create a plain (WebGL-backed) SDL window so bring-up can proceed.
+#ifdef __EMSCRIPTEN__
+			fprintf(stderr, "INFO: [WASM] Skipping Vulkan/DXVK; creating plain SDL window.\n");
+			Uint32 windowFlags = SDL_WINDOW_RESIZABLE;  // no VULKAN, no HIDDEN (show immediately)
+			TheSDL3Window = SDL_CreateWindow(
+				"Command & Conquer Generals (WASM)",
+				1024, 768,
+				windowFlags
+			);
+			if (!TheSDL3Window) {
+				fprintf(stderr, "FATAL: [WASM] Failed to create SDL window: %s\n", SDL_GetError());
+				SDL_Quit();
+				return 1;
+			}
+#else
 			// Set DXVK WSI driver before loading Vulkan
 			setenv("DXVK_WSI_DRIVER", "SDL3", 1);
 
@@ -314,6 +350,7 @@ int main(int argc, char* argv[])
 				SDL_Quit();
 				return 1;
 			}
+#endif // __EMSCRIPTEN__
 
 			// Store window handle globally (cast SDL_Window* to HWND for compatibility)
 			ApplicationHWnd = (HWND)TheSDL3Window;
@@ -370,5 +407,22 @@ int main(int argc, char* argv[])
 	// _exit() matches that behavior. Explicit cleanup already done above (SDL_Quit, shutdownMemoryManager).
 	_exit(exitcode);
 }
+
+// GeneralsX @build 07/07/2026 WASM entry wrapper.
+// This emscripten build's generated loader does not auto-invoke C++ main(), and
+// exporting a name-mangled main() is unreliable. Expose a stable C-linkage entry
+// the browser launcher can call via Module.ccall('wasm_start_game', ...).
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+extern "C" EMSCRIPTEN_KEEPALIVE int wasm_start_game(void)
+{
+	static char  arg0[] = "GeneralsX";
+	static char  arg1[] = "-win";
+	static char* wasmArgv[] = { arg0, arg1, nullptr };
+	fprintf(stderr, "[WASM] wasm_start_game() invoked from JS launcher.\n");
+	fflush(stderr);
+	return main(2, wasmArgv);
+}
+#endif // __EMSCRIPTEN__
 
 #endif // !_WIN32
