@@ -20,6 +20,10 @@ body {
   color: var(--gx-text);
 }
 
+[hidden] {
+  display: none !important;
+}
+
 #app {
   position: relative;
   width: 100%;

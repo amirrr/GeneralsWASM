@@ -50,7 +50,7 @@ Module.preRun.forEach((callback) => callback());
 if (dependencies === 0) queueMicrotask(() => Module.onRuntimeInitialized());
 `;
 
-/** Tiny synthetic engine and game-data fixtures - arbitrary bytes, not game data. */
+/** Tiny synthetic engine and game-data fixtures — arbitrary bytes, not game data. */
 export const FIXTURE_ASSETS: readonly FixtureAsset[] = [
   makeFixtureAsset("engine/GeneralsXZH.js", FAKE_ENGINE_SCRIPT),
   makeFixtureAsset("engine/GeneralsXZH.wasm", "synthetic-wasm-placeholder"),

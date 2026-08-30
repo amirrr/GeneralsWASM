@@ -78,11 +78,18 @@ npm run dev -w @generalsx-web/worker     # wrangler dev on :8787
   (`storage.ts`), bounded-memory virtual file system (`vfs.ts`), and the
   typed error surface (`errors.ts`).
 - `src/ui/` — canvas, loading overlay, error overlay, settings panel, and
-  room create/join panel, wired together in `src/main.ts`. Instantiating the
-  actual Emscripten engine module is out of scope for this scaffold; the
-  seam is `startEngineBoot()` in `src/main.ts`.
-- `src/net/` — `SignalingClient` (WebSocket wrapper for the room protocol)
-  and `fetchIceServers` (calls the Worker's `/turn-credentials`).
+  room create/join panel, wired together in `src/main.ts`.
+- `src/engine/emscripten-loader.ts` — launches the verified engine JS/wasm,
+  stages manifest-mounted files into Emscripten's filesystem in bounded
+  chunks, applies preferences, and reports startup failures to the launcher.
+- The generated Emscripten module exposes `Module.generalsxAudio`. Launcher
+  integration calls `bindUserGesture(canvas)` after runtime initialization.
+  The bridge resumes interrupted WebAudio contexts and requests MiniAudio
+  device recovery after browser lifecycle or output-device changes.
+- `src/net/` — `SignalingClient` (WebSocket wrapper for the room protocol;
+  see **Room join lifecycle** below for its connect/leave guarantees),
+  `fetchIceServers` (calls the Worker's `/turn-credentials`; invoked by
+  the bridge itself, per join), and `WebRtcUdpBridge` (see below).
 - `scripts/write-headers.ts` — post-build step that renders
   `dist/_headers` (Cloudflare Pages header file) from the same
   `renderPagesHeadersFile` policy the Worker uses, so COOP/COEP/CORP/CSP
@@ -119,7 +126,7 @@ serves and verifies every byte. Full operator guide:
       "sizeBytes": 41582592,
       "sha256": "…64 lowercase hex chars…",
       "etag": "\"a1b2c3\"",                   // strong ETag, optional
-      "mount": { "target": "/generalsx/engine/generalsx.wasm",
+      "mount": { "target": "/engine/generalsx.wasm",
                  "order": 1, "streaming": false }
     }
   ]
@@ -251,10 +258,112 @@ Defined in `packages/shared/src/protocol.ts`:
   slot bounds, SDP length) before it is trusted; invalid input yields a
   typed `error` message instead of a crash or silent drop.
 
-## Not included in this scaffold
+## WebRTC UDP bridge (`apps/launcher/src/net/webrtc-udp-bridge.ts`)
 
-- Instantiating the actual Emscripten/WebAssembly engine module.
-- Any retail game asset, engine binary, or asset-hosting deployment.
+Emulates a small UDP-like transport over WebRTC unordered DataChannels, so
+the existing GeneralsX engine networking code (written for real UDP
+sockets) can run unmodified in the browser. `main.ts` constructs a
+`WebRtcUdpBridge` from the same `SignalingClient` instance used by the room
+UI, plus the signaling Worker's base URL (for on-demand TURN credential
+fetches — see **Room join lifecycle** below), and publishes it as
+`window.GeneralsXUdp` before engine module instantiation.
+
+The bridge mirrors the wire format and ABI of the engine repository's
+development-harness reference implementation
+(`wasm/webrtc_udp.js`) bit-for-bit, so either transport talks to the
+native engine module unmodified. **Every address is a host-order
+`uint32`, never a string** — `bind()`/`localIP()`/`hostIP()` return
+numbers (`0` means "unassigned"), `send()` takes a numeric `destIP` and
+returns the integer count of peers the datagram was handed to a
+DataChannel for, and `recv()` resolves `{ ip, port, data }` (matching the
+field names the engine's Emscripten glue reads directly off the packet
+object). Display-only strings (dotted-quad IPs) are confined to
+`status()`, which the launcher UI reads for its room panel.
+
+- **Addressing** — every stable room slot (0..capacity-1) maps to a
+  synthetic IPv4 address `10.0.0.(slot+1)`, encoded as `uint32`; the
+  reserved broadcast address is `0xffffffff` (not `10.0.0.255`), which
+  fans a `send()` out to every connected peer.
+- **Framing** — each DataChannel message is a 4-byte header (2-byte
+  little-endian source port, 2-byte little-endian destination port)
+  followed by the raw payload. Anything shorter than the header, or with
+  an oversized payload, is dropped as malformed, never queued; incoming
+  messages are also validated to be an `ArrayBuffer` (not a `Blob` or
+  `string`) before being parsed.
+- **Negotiation** — "perfect negotiation" with a deterministic
+  polite/impolite role per peer pair (the lower slot is always impolite,
+  creates the `generalsx-udp` DataChannel, and wins glare; the higher
+  slot is polite and yields), so either side can (re)negotiate without a
+  signaling-layer lock. Works with both direct/STUN and TURN-relayed ICE
+  candidates.
+- **Reliability** — DataChannels are `{ ordered: false, maxRetransmits: 5
+  }`: GeneralsX's own engine netcode already implements application-level
+  reliability (acks/resends) on top of UDP, so the transport stays close
+  to fire-and-forget semantics — with a small bounded retransmit count
+  rather than unlimited, so a lossy link cannot grow the send buffer
+  without bound — instead of stacking a second, redundant retry/ordering
+  layer on top.
+- **Safety bounds** — each bound port's inbox evicts its oldest queued
+  datagram once it hits `maxInboxPacketsPerPort` (default 256), and
+  outgoing sends are dropped (not queued or blocked) once a channel's
+  `bufferedAmount` exceeds `maxBufferedAmountBytes` (default 64 KiB),
+  mirroring how a real UDP socket drops under congestion.
+- **Explicit errors** — invalid ports/addresses/payload types and using an
+  unbound port throw a typed `UdpBridgeError`; network-level conditions
+  (unknown/disconnected peer, backpressure) instead return `0`/`null`,
+  matching best-effort UDP semantics.
+- Peer connections are torn down cleanly on roster departure, an explicit
+  `peer-left` signal, or the signaling socket closing.
+
+### Room join lifecycle
+
+`joinRoom()`/`leaveRoom()` (used both by the engine ABI and the launcher's
+room panel) and `SignalingClient.connect()`/`leave()` are all designed so
+that a rejoin, a room switch, or a rapid double-click can never leave a
+duplicate room membership or stale connection behind:
+
+- `SignalingClient.connect()` always supersedes any socket it already
+  owns first — the old socket's listeners are detached before it is
+  closed, so its (possibly asynchronous) close event can never fire
+  after the new connection has already started emitting its own events.
+  `leave()` sends a `leave` request (if still open) and then always
+  closes the socket locally, so the same `SignalingClient` instance can
+  safely be reused for a later `connect()` (rejoin).
+- `WebRtcUdpBridge.joinRoom()` tears down any existing peers/room state
+  immediately, then fetches TURN credentials **fresh for this join**
+  (never once at launcher startup, where the ~10-minute credential TTL
+  could expire long before a match starts) before ever opening the
+  signaling connection — so peer connections are always created with
+  credentials that were just issued. A bridge instance constructed
+  without a `turnWorkerBaseUrl` (e.g. a single-player/offline boot
+  path that never joins a room) never calls TURN at all.
+  A generation counter guards every step of this sequence, so a slower,
+  superseded `joinRoom()`/`leaveRoom()` call can never race ahead of a
+  newer one and resurrect torn-down state.
+- TURN fetch failures are **non-fatal**: the bridge falls back to
+  direct/STUN-only ICE and reports it via the `onJoinIssue` callback
+  (`{ kind: "turn-unavailable" }`) so the launcher can show a **visible
+  warning** in the room panel — direct-ICE fallback is explicit, never
+  silent. A signaling socket closing before a room join ever completes is
+  reported as `{ kind: "join-failed" }`, which the launcher routes to its
+  blocking error overlay.
+
+## Runtime staging
+
+Verified files remain in OPFS between sessions. Engine JS and wasm are
+executed from verified Blob URLs. The current legacy Emscripten filesystem
+API is synchronous, so BIG archives must still be copied from OPFS into
+MEMFS before `main()` runs; the loader performs that copy in 4 MiB chunks
+to avoid a second whole-archive JavaScript buffer. The wasm build therefore
+retains its 4 GiB memory ceiling. Replacing MEMFS residency entirely requires
+a worker-hosted synchronous OPFS backend and is a later optimization.
+
+## Not included
+
+- Instantiating the actual Emscripten/WebAssembly engine module. The
+  bridge is published at `window.GeneralsXUdp` in anticipation of that
+  integration, but nothing yet calls into it from engine code.
+- Any retail game asset, published engine binary, or asset-hosting deployment.
 - Live deployment of the Worker or Pages project (this tree is
   infrastructure-only; no `wrangler deploy` / `wrangler pages deploy`
   without a real Cloudflare account, secrets, and domain provisioning
