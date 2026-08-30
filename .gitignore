@@ -94,3 +94,4 @@ logs_*.zip
 /cmake/ngmp_env.cmake
 references/GameClient/
 references/GameServer/
+.gstack/
