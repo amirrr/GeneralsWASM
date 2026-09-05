@@ -1,228 +1,119 @@
-# GeneralsX: Instructions for AI Coding Agents
+# GeneralsX WASM Fork: Agent Instructions
 
-## What I Am
-GeneralsX is a cross-platform port of Command & Conquer: Generals Zero Hour for **Linux and macOS**, porting legacy Windows DirectX 8 + Miles Sound code to a modern stack (SDL3 + DXVK + OpenAL + 64-bit). This is a **massive C++ game engine** (~500k LOC) preserving retail gameplay while modernizing the platform layer.
+## What this repo is
+This repository is a fork of GeneralsX focused on browser/WASM feasibility and prototype work for Command & Conquer: Generals and Zero Hour.
 
-## Key Entry Points
+This is not the primary upstream GeneralsX desktop release project. It is an exploratory branch that reuses the same modernization stack while testing whether the project can be adapted for an Emscripten browser target without breaking the native desktop baseline.
+
+## Mission
+The current mission is to investigate and reduce the gap between:
+
+- the existing GeneralsX platform modernization work
+- a browser-friendly runtime model
+- a practical playability target for WASM/Emscripten
+
+This means the work should stay oriented around browser port feasibility, platform abstraction, and backend replacement decisions, not just desktop packaging.
+
+## Project status
+- **Primary goal**: browser/WASM path
+- **Secondary baseline**: native Linux/macOS validation and compatibility
+- **Not the mainline release**: this fork may lag behind upstream and is intentionally experimental
+- **Current target**: the scoping build links successfully, but no playable browser runtime exists yet
+
+## Key entry points
 - `GeneralsMD/Code/Main/WinMain.cpp`
 - `Generals/Code/Main/WinMain.cpp`
 - `Core/GameEngineDevice/Source/`
+- `docs/WORKDIR/support/WASM_BROWSER_SCOPING_2026-07.md`
+- `docs/WORKDIR/support/WASM_BROWSER_IMPLEMENTATION_LOG.md`
 
-## Platform Focus
-- **Active**: Linux (`linux64-deploy`), macOS (`macos-vulkan`)
-- **Future/Exploratory**: Windows (MinGW path, issue #29)
-- **Legacy**: VC6 + DirectX 8 + Miles (reference only)
+## Platform focus
+- **Active exploration**: Emscripten/WASM browser target
+- **Baseline validation**: Linux (`linux64-deploy`), macOS (`macos-vulkan`)
+- **Future/secondary**: Windows path remains exploratory
+- **Legacy**: VC6 + DirectX 8 + Miles remains reference only
 
-## Architecture
-| Layer   | Technology          | Replaces                     |
-|---------|---------------------|------------------------------|
-| Graphics| DXVK                | DirectX 8 (d3d8.dll)         |
-| Windowing| SDL3              | Win32 API                    |
-| Audio   | OpenAL (MiniAudio WIP)| Miles Sound System           |
-| Video   | FFmpeg              | Bink Video (intro/videos)    |
-| Platform| SDL3 + libc         | Win32 POSIX calls            |
+## Architectural intent
+| Layer | Technology | Current role |
+|-------|------------|--------------|
+| Graphics | DXVK / browser backend analysis | Desktop baseline plus browser rewrite investigation |
+| Windowing | SDL3 | Desktop baseline, browser-compatible abstraction target |
+| Audio | OpenAL / MiniAudio | Desktop backends; the WASM scoping graph skips legacy WWAudio |
+| Video | FFmpeg | Useful for desktop, likely cut or redesigned for browser v1 |
+| Platform | SDL3 + libc + abstraction work | Keep portable, browser-aware design |
 
-**CRITICAL**: Platform code must be isolated to `Core/GameEngineDevice/` and `Core/Libraries/Source/Platform/`. No native Win32/Cocoa/X11 calls in game logic.
+**CRITICAL**: Keep platform code isolated and avoid adding desktop-only assumptions into browser-facing work. This repo should remain compatible with the native baseline while making the browser target explicit.
 
-## Golden Rules
-1. **Single codebase** – Linux and macOS build from same source
-2. **SDL3 everywhere** – No native platform calls in game code
-3. **DXVK everywhere** – DX8 → Vulkan translation on all platforms
-4. **OpenAL default (MiniAudio WIP)** – Cross-platform audio stack. Audio fixes must prioritize OpenAL but be backported to MiniAudio.
-5. **64-bit native** – x86_64 only (32-bit via VC6 upstream)
-6. **Retail compatibility** – Original replays and mods must work
-7. **Determinism** – Rendering/audio changes must not affect gameplay logic
-8. **No band-aids** – Fix underlying issues, not symptoms
-9. **Update worklog** – Update `docs/WORKLOG/YYYY-MM-DIARY.md` before committing (see [.github/instructions/docs.instructions.md](.github/instructions/docs.instructions.md) for details)
-10. **Reference repos** – Study patterns, don't copy-paste
-11. **Backport to Generals** – Bugfixes and improvements must be backported to the Generals base game.
+## Golden rules
+1. **Treat this as a WASM/feasibility fork, not the stable GeneralsX release branch**
+2. **Keep browser target requirements visible in the work**
+3. **Prefer platform abstraction over ad hoc desktop-only fixes**
+4. **Do not assume desktop Linux/macOS is the final goal**
+5. **Retain upstream compatibility and regression awareness**
+6. **Be explicit about browser blockers and cut scopes**
+7. **Use the native baseline as a reference, not as the only destination**
+8. **Update worklog and notes when making changes**
+9. **Backport only when it clearly helps the broader project and remains relevant to the fork**
+10. **Study upstream patterns and keep this fork's scope honest**
 
-## Reference Repositories
-- **fighter19-dxvk-port** – Primary graphics/platform reference (DXVK + SDL3 on Linux)
-- **jmarshall-win64-modern** – Audio reference (OpenAL implementation, Generals-only)
-- **thesuperhackers-main** – Upstream baseline for regression checks
+## Reference repos and baselines
+- **GeneralsX** — main desktop modernization project and compatibility baseline
+- **TheSuperHackers** — upstream game-code baseline for regressions and retail compatibility
+- **fighter19-dxvk-port** — archived Linux DXVK + SDL3 reference under `references/old-refs/`
+- `docs/WORKDIR/support/WASM_BROWSER_SCOPING_2026-07.md` — feasibility and dependency audit
+- `docs/WORKDIR/support/WASM_BROWSER_IMPLEMENTATION_LOG.md` — active build status, blockers, and fixes
 
-## Build Commands
+## Build commands
 
-### Linux (Docker-based)
-Docker is the recommended build method on Linux hosts to ensure all toolchain requirements are met.
-
-*   **Configure Build**:
-    ```bash
-    ./scripts/build/linux/docker-configure-linux.sh linux64-deploy
-    ```
-*   **Build Zero Hour**:
-    ```bash
-    ./scripts/build/linux/docker-build-linux-zh.sh linux64-deploy
-    ```
-*   **Build Generals (Base Game)**:
-    ```bash
-    ./scripts/build/linux/docker-build-linux-generals.sh linux64-deploy
-    ```
-*   **Flatpak Bundle Packaging**:
-    ```bash
-    ./scripts/build/linux/build-linux-flatpak.sh linux64-deploy Generals    # Base game
-    ./scripts/build/linux/build-linux-flatpak.sh linux64-deploy GeneralsMD  # Zero Hour
-    ```
-*   **Optional MinGW Windows Cross-build**:
-    ```bash
-    ./scripts/build/linux/docker-build-mingw-zh.sh mingw-w64-i686
-    ```
-
-### Native Linux
-*   **Configure & Build via CMake**:
-    ```bash
-    cmake --preset linux64-deploy
-    cmake --build build/linux64-deploy --target z_generals
-    ```
-*   **Deploy**:
-    ```bash
-    ./scripts/build/linux/deploy-linux.sh     # Generals base game
-    ./scripts/build/linux/deploy-linux-zh.sh  # Generals Zero Hour
-    ```
-
-### Native macOS
-*   **Configure Build**:
-    ```bash
-    cmake --preset macos-vulkan
-    ```
-*   **Build via Scripts**:
-    ```bash
-    ./scripts/build/macos/build-macos-generals.sh  # Generals base game
-    ./scripts/build/macos/build-macos-zh.sh        # Generals Zero Hour
-    ```
-    *(Alternatively, build via CMake: `cmake --build build/macos-vulkan --target z_generals`)*
-*   **Deploy**:
-    ```bash
-    ./scripts/build/macos/deploy-macos-generals.sh  # Generals base game
-    ./scripts/build/macos/deploy-macos-zh.sh        # Generals Zero Hour
-    ```
-*   **App Bundle Packaging**:
-    ```bash
-    ./scripts/build/macos/bundle-macos-generals.sh  # Generals Mac app bundle
-    ./scripts/build/macos/bundle-macos-zh.sh        # Generals Zero Hour Mac app bundle
-    ```
-
-## Target Priority
-1. **GeneralsXZH** (Zero Hour) – Primary target, most feature-complete
-2. **GeneralsX** (Base game) – Stable and functional. Bugfixes and improvements must be backported.
-
-## Backport Rules
-**Backport to Generals when:**
-- Change is platform/backend code (SDL3, DXVK, OpenAL/MiniAudio) or a general bugfix/improvement
-- Change is in shared Core libraries
-- Change is low-risk and clearly applicable
-
-**Do NOT backport:**
-- Zero Hour-specific gameplay/logic
-- Expansion-specific features
-- High-risk changes to Zero Hour
-
-## DXVK Source of Truth (macOS)
-- Default: GitHub fork branch `generalsx-macos-v2.6` (auto-update enabled)
-- Local mode: `-DSAGE_DXVK_USE_LOCAL_FORK=ON`
-- **Rule**: Never edit files in `build/_deps/...` directly. Always commit fixes in fork repo first.
-
-## Common Pitfalls
-- **Linux case sensitivity**: Include paths must match exact case. Use `scripts/tooling/cpp/fixIncludesCase.sh`.
-- **DXVK needs Vulkan**: Install `vulkan-tools`, `mesa-vulkan-drivers` or GPU drivers.
-- **-logToCon only in debug**: Available only with `RTS_BUILD_OPTION_DEBUG=ON`.
-- **SDL3 from source**: Fetched via CMake FetchContent. No system package needed.
-- **Manual memory**: Always delete/delete[]. Use STLPort for VC6 legacy builds.
-- **Debug options break replays**: Use `RTS_BUILD_OPTION_DEBUG=OFF` for replay tests.
-
-## Testing & Validation
-### Smoke test
+### Native baseline
 ```bash
-./scripts/qa/smoke/docker-smoke-test-zh.sh linux64-deploy
+cmake --preset linux64-deploy
+cmake --build build/linux64-deploy --target z_generals
 ```
 
-### Replay testing
+### Browser/WASM exploration
 ```bash
-cd ~/GeneralsX/GeneralsMD
-./run.sh -win -logToCon 2>&1 | grep -v "D3DRS_PATCHSEGMENTS" | tee ~/GeneralsX/logs/manual_run.log
+cmake --preset wasm-emscripten-scope
+cmake --build build/wasm-emscripten-scope -j 4
 ```
 
-### Debug GDB
-```bash
-mkdir -p logs && gdb -batch -ex "run -win" -ex "bt full" -ex "thread apply all bt" \
-  ./build/linux64-deploy/GeneralsMD/GeneralsXZH 2>&1 | tee logs/gdb.log
-```
+The current preset builds `GeneralsX.js` and `GeneralsXZH.js` and has passed loader-level Node.js smoke tests. It is not a playable browser build: browser startup, asset delivery, graphics, media, networking, and runtime validation remain incomplete.
 
+The preset intentionally disables or excludes DX8/DXVK rendering, FFmpeg, OpenAL, crash dumps, and desktop tools. Treat `CMakePresets.json` and the implementation log as the source of truth for the current cut scope.
 
+## Status check for changes
+Before making a change, ask:
 
-## Branching & Sync
-### TheSuperHackers upstream sync
-```bash
-git remote add thesuperhackers git@github.com:TheSuperHackers/GeneralsGameCode.git
-git fetch thesuperhackers
-git merge thesuperhackers/main
-```
+- Does this help the browser/WASM exploration?
+- Does it improve the native baseline without creating new desktop-only debt?
+- Is the change aligned with the actual mission of this fork?
 
-**Conflict resolution**:
-- Platform code (`Core/GameEngineDevice/`): keep ours
-- Game logic (`GeneralsMD/Code/GameEngine/`): keep theirs
-- Build system: merge carefully, test both versions
+If the answer is no, it likely belongs in the upstream desktop project instead.
 
-## Code Conventions
-- **Annotate changes**: `// GeneralsX @keyword author DD/MM/YYYY Description`
-- **Keywords**: `@bugfix` / `@feature` / `@performance` / `@refactor` / `@tweak` / `@build`
-- **Attribution**: Add upstream PR references with author and GitHub URL
-- **English only**: All code, comments, documentation
-- **No lazy code**: No empty stubs, empty catch blocks, or commented-out code
+## Documentation workflow
+1. Keep the root docs honest about the fork's status and mission
+2. Keep active work in `docs/WORKDIR/`
+3. Keep monthly diary entries in `docs/WORKLOG/YYYY-MM-DIARY.md`
+4. Do not treat this repo as the default end-user GeneralsX release branch
 
-## GitHub PR/Issue Formatting
-- Use `--body-file` with real Markdown file instead of `--body`
-- Avoid literal `\n` sequences; prefer actual newlines in multi-line strings
+## Agent guidance
+- Keep scope narrow and intentional
+- Favor feasibility analysis and root-cause investigation over broad cleanup
+- Document browser constraints, architectural blockers, and minimal viable cuts
+- Preserve clarity between upstream GeneralsX work and this fork's WASM-specific efforts
 
-## VS Code Tasks
-- Prefer task-first execution for build/test/debug
-- Logs captured to `logs/` directory
-- Primary labels: `[Linux]`, `[macOS]`, `[Linux] Pipeline: Build + Deploy + Run ZH`
-
-## Docs Workflow
-1. Monthly diary in `docs/WORKLOG/YYYY-MM-DIARY.md` (YYYY=year, MM=month only, e.g., `2026-05-DIARY.md`)
-2. Active work notes in `docs/WORKDIR/` (phases/planning/reports/support/audit/lessons)
-3. Step-by-step tutorials in `docs/HOWTO/` (user-facing guides for common tasks)
-4. Never drop working docs directly under `docs/` root
-
-## GitHub CLI Examples
-
-> [!IMPORTANT]
-> When running `gh` commands within the agent sandbox environment, if `GITHUB_TOKEN=github_pat_antigravitydummytoken` is present, it will override local credentials and cause `HTTP 401: Bad credentials`. Unset the dummy token by prepending `env -u GITHUB_TOKEN -u GH_TOKEN` to your `gh` commands.
-> 
-> Example: `env -u GITHUB_TOKEN -u GH_TOKEN gh pr create ...`
-
-**Create issues:**
-```bash
-gh issue create \
-  --title "Brief, actionable title" \
-  --body "## Context\n...\n## Goal\n...\n## Acceptance Criteria\n..." \
-  --label bug --label Linux
-```
-
-**Create PRs (use temp file for body):**
-```bash
-cat > /tmp/pr-body.md << 'EOF'
-## Description
-Fixes #123
-
-## Changes
-- Platform isolation
-EOF
-gh pr create --title "Description" --body-file /tmp/pr-body.md
-```
-
-**Verify PR body (check for literal \n):**
-```bash
-body=$(gh pr view <number> --json body --jq .body)
-printf "%s" "$body" | rg '\\n' && echo "HAS_LITERAL_BACKSLASH_N=YES" || echo "HAS_LITERAL_BACKSLASH_N=NO"
-```
+## GitHub issue and PR expectations
+- Use GitHub Issues for tracking blockers and feature work
+- Prefer small, scoped PRs that advance the browser/WASM path or clarify the native baseline
+- Avoid portraying this fork as a replacement for the upstream mainline project
 
 ## Build Presets Reference
 - **linux64-deploy** – GCC/Clang x86_64, Release (PRIMARY LINUX)
-- **linux64-testing** – Debug variant
-- **macos-vulkan** – macOS ARM64, RelWithDebInfo (PRIMARY MACOS)
+- **linux64-openal** – legacy Linux OpenAL variant
+- **linux64-miniaudio** – Linux MiniAudio variant
+- **macos-vulkan** – macOS ARM64, RelWithDebInfo, MiniAudio (PRIMARY MACOS)
+- **macos-openal** – legacy macOS OpenAL variant
+- **wasm-emscripten-scope** – Emscripten wasm32 scoping build
 - **mingw-w64-i686** – MinGW cross-compile (exploratory)
 - **vc6** – Visual Studio 6, 32-bit (legacy)
 - **win32** – MSVC 2022, experimental

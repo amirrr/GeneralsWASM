@@ -1,93 +1,99 @@
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/fbraz3/GeneralsGameCode)
-[![GeneralsX CI](https://github.com/fbraz3/GeneralsX/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fbraz3/GeneralsX/actions/workflows/ci.yml)
-[![GitHub Release](https://img.shields.io/github/v/release/fbraz3/GeneralsX?include_prereleases&sort=date&display_name=tag&style=flat&label=Release)](https://github.com/fbraz3/GeneralsX/releases)
+[![GeneralsWASM CI](https://github.com/amirrr/GeneralsWASM/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/amirrr/GeneralsWASM/actions/workflows/ci.yml)
 
-# GeneralsX - Cross-Platform Command & Conquer: Generals
+# GeneralsX WASM Fork
 
-GeneralsX delivers **Linux and macOS** builds of **Command & Conquer: Generals and Zero Hour** through a single modern codebase.
+This repository is a fork of [GeneralsX](https://github.com/fbraz3/GeneralsX) with a more specific goal: explore and prototype a browser/WebAssembly port of Command & Conquer: Generals and Zero Hour.
 
-## How to download
+This fork is intentionally not a polished release fork of the upstream Linux/macOS project. It is a work-in-progress branch focused on understanding what it takes to move the existing GeneralsX modernization stack toward Emscripten/WASM, browser runtimes, and a reduced desktop dependency model.
 
-For **official releases and instructions**, visit:
+## Current project intent
 
-* [GeneralsX Releases](https://github.com/fbraz3/GeneralsX/releases)  - Linux and Mac
-* [TheSuperHackers Releases](https://github.com/TheSuperHackers/GeneralsGameCode/releases) - Windows
-* [Fighter19 Releases](https://github.com/Fighter19/CnC_Generals_Zero_Hour/releases) - Original Linux-focused Zero Hour reference releases
+The main objective is to answer a practical question:
 
-> See our [Tutorial Docs](docs/HOWTO/README.md) for step-by-step guides.
+- Can the current GeneralsX codebase be adapted to run in the browser without rewriting the whole game from scratch?
+- What parts are browser-compatible today?
+- Which desktop assumptions must be cut, replaced, or abstracted before a browser target is viable?
 
-## 💖 Support This Project
+In practice, this means working on:
 
-The optional sponsorship link exists to help cover the maintenance costs specific to GeneralsX: Linux/macOS integration, project-specific adaptation work, testing infrastructure, packaging, tooling, release work, and documentation.
+- Emscripten/WASM toolchain integration
+- Browser-safe build configuration and feature gating
+- Rendering and platform abstraction analysis
+- Removing or isolating desktop-only assumptions like DXVK/Vulkan desktop runtime expectations, FFmpeg-heavy media paths, and legacy multiplayer/service assumptions
+- Keeping the upstream GeneralsX and TheSuperHackers codebase as the baseline while experimenting with a browser-first path
 
-- **[Sponsor on GitHub](https://github.com/sponsors/fbraz3)**
+## Repository status
 
-Your support specifically helps with:
+This fork may lag behind mainline GeneralsX and should be treated as an exploratory branch, not a stable release line.
 
-- **Integration, Adaptation and Enhancements** - Merging reference work, resolving incompatibilities, and carrying project-specific fixes needed for supported platforms
-- **Testing Infrastructure** - Validation across Linux and macOS, plus exploratory work needed to keep future platform paths viable
-- **Packaging & Releases** - AppImage, Flatpak, macOS bundles, CI pipeline
-- **Documentation & Maintenance** - Build guides, installation instructions, developer resources, and ongoing repository upkeep
+The current state is best described as:
 
-## Where does the GeneralsX name come from?
+- The `wasm-emscripten-scope` preset configures and builds both Generals and Zero Hour JavaScript/WASM artifacts
+- Both generated loaders pass a basic headless Node.js smoke test
+- No interactive browser shell, asset delivery flow, rendering backend, or playable browser runtime is complete yet
+- Native Linux and macOS remain compatibility baselines inherited from GeneralsX
 
-There are two reasons for this name:
+## Why this fork exists
 
-1. X = Cross - reflects the cross-platform efforts
-2. I am a big fan of the Mega Man X franchise, so this is also a tribute to that classic series.
+This fork exists because the upstream GeneralsX project is primarily focused on a modern desktop port stack around SDL3, DXVK, OpenAL, FFmpeg, and Linux/macOS packaging. This repository adds a second layer of work: evaluating how much of that same porting effort can survive a browser target and what the minimum viable browser-friendly architecture looks like.
 
-## Project Goals
+## Relationship to the wider ecosystem
 
-GeneralsX exists to turn upstream preservation and porting work into a practical and maintainable project for active Linux and macOS players.
+- Upstream GeneralsX remains the main desktop-port project and the broader compatibility baseline.
+- TheSuperHackers remains the upstream game-code baseline for stability and compatibility.
+- This fork is a targeted investigation branch for browser/WASM feasibility rather than the default end-user distribution path.
 
-Its main goals are:
+## Relevant project docs
 
-- Preserve retail gameplay behavior while modernizing the platform layer.
-- Maintain a **single codebase** with Linux and macOS as the active targets. Both Zero Hour and the Generals base game are stable and functional; bugfixes and improvements must be applied to both, while keeping a future Windows path possible.
-- Carry the adaptation work needed to make the stack function in practice across supported platforms, including repository-specific fixes when upstream constraints leave gaps.
-- Deliver reproducible builds, packaging, and release workflows that make the port usable beyond local development setups.
-- Replace the original Windows-only DirectX 8 / Miles stack with portable open-source equivalents where appropriate.
-- Keep upstream lineage clear by distinguishing foundational work from the integration, packaging, and platform support specific to GeneralsX.
+- [docs/WORKDIR/support/WASM_BROWSER_SCOPING_2026-07.md](docs/WORKDIR/support/WASM_BROWSER_SCOPING_2026-07.md) — browser/WASM feasibility and boundary analysis
+- [docs/WORKDIR/support/WASM_BROWSER_IMPLEMENTATION_LOG.md](docs/WORKDIR/support/WASM_BROWSER_IMPLEMENTATION_LOG.md) — current implementation notes and findings
+- [docs/BUILD/LINUX.md](docs/BUILD/LINUX.md) — native Linux baseline workflow
+- [docs/BUILD/MACOS.md](docs/BUILD/MACOS.md) — macOS baseline workflow
 
-## How does this project relate to other community projects?
+## Build and validation
 
-GeneralsX builds on complementary community efforts with different roles.
+The current WASM target is a scoping build. It proves that the selected runtime graph can compile and link; it does not yet produce a playable browser release.
 
-**TheSuperHackers** provides the main upstream foundation for stability, bug fixes, retail compatibility, and long-term maintenance of the original game code.
+```bash
+cmake --preset wasm-emscripten-scope
+cmake --build build/wasm-emscripten-scope -j 4
+```
 
-**Fighter19's fork**, including major work by **feliwir**, is a key Zero Hour cross-platform reference that established much of the ecosystem groundwork used here, including SDL3 windowing, DXVK-based rendering, OpenAL audio, FFmpeg media support, filesystem modernization, and related Linux-focused portability work.
+Current outputs:
 
-While GeneralsX builds on important community work, this project also includes substantial original effort in integration, adaptation, platform-specific fixes, enhancements, testing, packaging, and ongoing maintenance.
+- `build/wasm-emscripten-scope/Generals/GeneralsX.js`
+- `build/wasm-emscripten-scope/GeneralsMD/GeneralsXZH.js`
 
-Because these projects serve different but complementary goals, not every change belongs in the same place. Improvements aligned with upstream stability or core maintenance priorities should be contributed back to TheSuperHackers, while GeneralsX keeps changes specific to cross-platform delivery, packaging, and platform integration.
+The preset deliberately excludes or bypasses desktop-only pieces, including DX8/DXVK rendering, FFmpeg video, OpenAL, crash dumps, and non-runtime tools. See the implementation log for the current feature cuts and blocker history.
 
-##  Building from Source
+This repository also retains the desktop build infrastructure used to validate the inherited native baseline.
 
-- [ Linux Build Guide](docs/BUILD/LINUX.md)
-- [ macOS Build Guide](docs/BUILD/MACOS.md)
+For native validation, see:
 
-###  Known Issues & Limitations
+- [docs/BUILD/LINUX.md](docs/BUILD/LINUX.md)
+- [docs/BUILD/MACOS.md](docs/BUILD/MACOS.md)
 
-For documented limitations and known bugs, check the [issues page](https://github.com/fbraz3/GeneralsX/issues).
+## Contribution direction
 
----
+Contributions should align with the fork's actual purpose:
 
-## 🤝 How to Contribute
+- Browser/WASM feasibility work
+- Toolchain and feature-gating work for Emscripten
+- Platform abstraction and backend analysis
+- Minimal browser-compatible runtime experiments
+- Documentation of blockers and viable cut scopes
 
-1. Check [current issues](https://github.com/fbraz3/GeneralsX/issues) and [GitHub discussions](https://github.com/fbraz3/GeneralsX/discussions)
-2. Read platform-specific build guides ([Windows](docs/ETC/), [macOS](docs/BUILD/MACOS.md), [Linux](docs/BUILD/LINUX.md))
-3. Submit issues or pull requests with detailed information
+This fork is not the place for broad, unrelated desktop-release polish unless it directly serves the browser porting goal.
 
-## 🙏 Special Thanks
+## Upstream and acknowledgements
 
-- **[Westwood Studios](https://cnc-comm.com/westwood-studios)** for creating the legendary Command & Conquer series
-- **[EA Games](https://www.ea.com/)** for Command & Conquer: Generals, which continues to inspire gaming communities
-- **[TheSuperHackers / Xezon](https://github.com/TheSuperHackers/GeneralsGameCode)** and contributors for the upstream stability, bug fixes, and code modernization that form the foundation of GeneralsX
-- **[Fighter19](https://github.com/Fighter19)** for the cross-platform port that pioneered SDL3 windowing, DXVK graphics, and MinGW build support on Linux
-- **[feliwir](https://github.com/feliwir)** for the foundational cross-platform systems implemented in Fighter19's fork: OpenAL audio, FFmpeg video decoding, C++17 filesystem, and Freetype/Fontconfig text rendering
-- **All contributors and sponsors** for helping to make this game truly cross-platform and accessible worldwide
+- [GeneralsX](https://github.com/fbraz3/GeneralsX) provides the desktop modernization and cross-platform baseline.
+- [TheSuperHackers](https://github.com/TheSuperHackers/GeneralsGameCode) provides the primary game-code, compatibility, and preservation foundation.
+- [Fighter19's port](https://github.com/Fighter19/CnC_Generals_Zero_Hour), including foundational work by feliwir, remains an important SDL3, DXVK, OpenAL, and FFmpeg reference.
 
-## 📄 License
+Improvements that belong to the desktop port or general game-code baseline should be proposed upstream where practical. WASM-specific experiments and browser architecture work belong in this fork.
+
+## License
 
 See the [LICENSE](./LICENSE.md) file for details.
 
