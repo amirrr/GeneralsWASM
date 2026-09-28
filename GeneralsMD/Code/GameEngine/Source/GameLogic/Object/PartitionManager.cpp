@@ -1654,7 +1654,8 @@ ObjectShroudStatus PartitionData::getShroudedStatus(Int playerIndex)
 		{	m_shroudedness[playerIndex] = OBJECTSHROUD_SHROUDED;				// every cell I use is shrouded
 			m_everSeenByPlayer[playerIndex] = false; //force object as never seen by the player
 			if (m_ghostObject && m_shroudednessPrevious[playerIndex] == OBJECTSHROUD_FOGGED)
-			{	//we are shrouding an area that used to be fogged so release our memory of what was there.
+			{
+				//we are shrouding an area that used to be fogged so release our memory of what was there.
 				m_ghostObject->freeSnapShot(playerIndex);
 			}
 		}
@@ -1666,20 +1667,24 @@ ObjectShroudStatus PartitionData::getShroudedStatus(Int playerIndex)
 				//fogged but may not be visible if faction unit or faction building that has not been seen before
 				Player *player=ThePlayerList->getNthPlayer(playerIndex);
 				if (player->getRelationship(m_object->getTeam()) == NEUTRAL)
-				{	//anything neutral that moves around will not be rendered inside fog.
+				{
+					//anything neutral that moves around will not be rendered inside fog.
 					if (!m_object->isKindOf(KINDOF_IMMOBILE))
 						m_shroudedness[playerIndex] = OBJECTSHROUD_SHROUDED;
 				}
 				else	//Not neutral
-				{	//enemy unit will always be shrouded unless it's a building that's already been seen by the player.  Fogged Mines are also always
+				{
+					//enemy unit will always be shrouded unless it's a building that's already been seen by the player.  Fogged Mines are also always
 					//shroued no matter what.
 					if (!(m_object->isKindOf(KINDOF_IMMOBILE) && m_everSeenByPlayer[playerIndex]) || m_object->isKindOf(KINDOF_MINE))
 						m_shroudedness[playerIndex] = OBJECTSHROUD_SHROUDED;
 				}
 				if (m_shroudedness[playerIndex] == OBJECTSHROUD_FOGGED)
-				{	//successfully applied fog to object so check if we need to freeze it's state
+				{
+					//successfully applied fog to object so check if we need to freeze it's state
 					if (m_shroudednessPrevious[playerIndex] < OBJECTSHROUD_FOGGED)
-					{	//object was not previously fogged but now is fogged.
+					{
+						//object was not previously fogged but now is fogged.
 						//need to record its current state so that it doesn't change
 						//while fogged.
 						m_ghostObject->snapShot(playerIndex);
@@ -1688,21 +1693,25 @@ ObjectShroudStatus PartitionData::getShroudedStatus(Int playerIndex)
 			}
 		}
 		else if( shroudedCells == 0  &&  foggedCells == 0 )
-		{	//Record that this object was seen by the player.  This info will be used to show fogged enemy faction buildings.
+		{
+			//Record that this object was seen by the player.  This info will be used to show fogged enemy faction buildings.
 			m_everSeenByPlayer[playerIndex] = true;
 			m_shroudedness[playerIndex] = OBJECTSHROUD_CLEAR;
 			if (m_ghostObject && m_shroudednessPrevious[playerIndex] == OBJECTSHROUD_FOGGED)
-			{	//object was previously fogged but now is visible so we no longer
+			{
+				//object was previously fogged but now is visible so we no longer
 				//need a ghost object.
 				m_ghostObject->freeSnapShot(playerIndex);
 			}
 		}
 		else
-		{	//Record that this object was seen by the player.  This info will be used to show fogged enemy faction buildings.
+		{
+			//Record that this object was seen by the player.  This info will be used to show fogged enemy faction buildings.
 			m_everSeenByPlayer[playerIndex] = true;
 			m_shroudedness[playerIndex] = OBJECTSHROUD_PARTIAL_CLEAR;		// I am at least partially clear otherwise
 			if (m_ghostObject && m_shroudednessPrevious[playerIndex] == OBJECTSHROUD_FOGGED)
-			{	//object was previously fogged but now is visible so we no longer
+			{
+				//object was previously fogged but now is visible so we no longer
 				//need a ghost object.
 				m_ghostObject->freeSnapShot(playerIndex);
 			}
@@ -3202,22 +3211,20 @@ Int PartitionManager::calcMinRadius(const ICoord2D& cur)
 		so it really shouldn't matter... (I hope)
 	*/
 
-	double minDistSqr = 1e12;				// double, not real
+	Real minDistSqr = 1e12f;
 	for (int i = 0; i < 4; ++i)
 	{
 		for (int j = 0; j < 4; ++j)
 		{
-			// double, not real
-			double dx = centerPos[i].x - otherPos[j].x;
-			double dy = centerPos[i].y - otherPos[j].y;
-			double curDistSqr = dx*dx + dy*dy;
+			Real dx = centerPos[i].x - otherPos[j].x;
+			Real dy = centerPos[i].y - otherPos[j].y;
+			Real curDistSqr = dx*dx + dy*dy;
 			if (minDistSqr > curDistSqr)
 				minDistSqr = curDistSqr;
 		}
 	}
 
-	// double, not real
-	double dist = WWMath::SqrtfOrigin(minDistSqr);
+	Real dist = WWMath::SqrtfOrigin(minDistSqr);
 	Int minRadius = REAL_TO_INT_CEIL( dist / m_cellSize );
 
 	return minRadius;
@@ -3232,10 +3239,9 @@ void PartitionManager::calcRadiusVec()
 	Int cx = getCellCountX();
 	Int cy = getCellCountY();
 
-	// double, not real
-	double dx = (double)cx * (double)cellSize;
-	double dy = (double)cy * (double)cellSize;
-	double maxPossibleDist = WWMath::SqrtOrigin(dx*dx + dy*dy);
+	Real dx = (Real)cx * (Real)cellSize;
+	Real dy = (Real)cy * (Real)cellSize;
+	Real maxPossibleDist = WWMath::SqrtfOrigin(dx*dx + dy*dy);
 
 	m_maxGcoRadius = REAL_TO_INT_CEIL(maxPossibleDist / cellSize);
 
@@ -3974,7 +3980,7 @@ Bool PartitionManager::findPositionAround( const Coord3D *center,
 	TheTerrainLogic->getMaximumPathfindExtent(&extent);
 	// If the goal is off the map, it is a scripted setup, so just
 	// use the center.
-	if (!extent.isInRegionNoZ(center)) {
+	if (!extent.isInRegionNoZ(*center)) {
 		*result = *center;
 		return true;
 	}

@@ -53,7 +53,7 @@
 
 #include <Utility/hash_map_adapter.h>
 
-#include "mutex.h"
+#include "WWLib/mutex.h"
 
 //----------------------------------------------------------------------------
 //           Forward References
@@ -162,6 +162,10 @@ public:
 
 	static bool removeExtension(AsciiString& path);
 	static bool removeExtension(UnicodeString& path);
+
+	/// Appends the native separator to nonempty paths unless either separator is already at the end.
+	/// Existing separators are not converted.
+	static void appendPathSeparator(AsciiString& path);
 
 protected:
 #if ENABLE_FILESYSTEM_EXISTENCE_CACHE

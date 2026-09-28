@@ -627,7 +627,7 @@ void AISkirmishPlayer::buildAIBaseDefenseStructure(const AsciiString &thingName,
 
 		Real structureRadius = tTemplate->getTemplateGeometryInfo().getBoundingCircleRadius();
 		Real baseCircumference = 2*PI*m_baseRadius;
-		Real angleOffset = 2*PI*(structureRadius*4/baseCircumference);
+		Real angleOffset = 2*PI*WWMath::Div_FixNaN(structureRadius*4, baseCircumference, 0.0f);
 
 		Int selector;
 		Real angle;
@@ -877,7 +877,8 @@ void AISkirmishPlayer::doBaseBuilding()
 			if (m_readyToBuildStructure) {
 				processBaseBuilding();
 			}
-			if (m_buildDelay<1) {	// processBaseBuilding may reset m_buildDelay.
+			if (m_buildDelay<1) {
+				// processBaseBuilding may reset m_buildDelay.
 				m_buildDelay = 2*LOGICFRAMES_PER_SECOND; // check again in 2 seconds.
 			}
 			// Note that this timer gets shortcut when a building is completed.

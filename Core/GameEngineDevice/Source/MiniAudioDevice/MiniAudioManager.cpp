@@ -205,12 +205,26 @@ void MiniAudioManager::reset()
 
 	AudioManager::reset();
 	stopAllAudioImmediately();
+	// GeneralsX @bugfix coolswood 18/07/2026 Restart sound groups in reset() to fix silent audio after loadGame.
+	// stopAllAudioImmediately() releases individual PlayingAudio entries but does not touch the four
+	// ma_sound_group nodes. If a prior pauseAudio() had stopped them (e.g. via the ESC menu used to pick
+	// "Load"), they remain stopped across loadGame(). New sounds attach to the stopped groups via
+	// ma_sound_init_from_data_source() and are then silently reaped by processPlayingList() because
+	// ma_sound_is_playing() returns false — the user observes "no sound until ESC toggled", since the
+	// pause/unpause cycle finally calls resumeAudio() -> ma_sound_group_start(). Restart the groups here
+	// so audio works immediately after a save load. Guarded by the per-type *On flags: if the device
+	// never opened (openDevice bailed out), the groups were never ma_sound_group_init'd, so touching
+	// them would be unsafe.
+	if (m_soundOn || m_sound3DOn || m_speechOn || m_musicOn) {
+		resumeAudio(AudioAffect_All);
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::update()
 {
 	ScopedFPUGuard fpuGuard;
+
 	AudioManager::update();
 	setDeviceListenerPosition();
 	processRequestList();
@@ -222,6 +236,8 @@ void MiniAudioManager::update()
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::stopAudio(AudioAffect which)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	if (BitIsSet(which, AudioAffect_Sound))
 		ma_sound_group_stop(&m_soundGroup);
 	if (BitIsSet(which, AudioAffect_Sound3D))
@@ -235,6 +251,8 @@ void MiniAudioManager::stopAudio(AudioAffect which)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::pauseAudio(AudioAffect which)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	if (BitIsSet(which, AudioAffect_Sound))
 		ma_sound_group_stop(&m_soundGroup);
 	if (BitIsSet(which, AudioAffect_Sound3D))
@@ -248,6 +266,8 @@ void MiniAudioManager::pauseAudio(AudioAffect which)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::resumeAudio(AudioAffect which)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	if (BitIsSet(which, AudioAffect_Sound))
 		ma_sound_group_start(&m_soundGroup);
 	if (BitIsSet(which, AudioAffect_Sound3D))
@@ -274,8 +294,13 @@ void MiniAudioManager::stopAllAmbientsBy(Drawable *draw)
 }
 
 //-------------------------------------------------------------------------------------------------
-void MiniAudioManager::playAudioEvent(AudioEventRTS *event)
+void MiniAudioManager::playAudioEvent(AudioRequest *req)
 {
+	AudioEventRTS *event = req->m_pendingEvent.Peek();
+	if (!event) {
+		return;
+	}
+
 	const AudioEventInfo *info = event->getAudioEventInfo();
 	if (!info) {
 		return;
@@ -289,7 +314,7 @@ void MiniAudioManager::playAudioEvent(AudioEventRTS *event)
 
 	AudioHandle handleToKill = event->getHandleToKill();
 	PlayingAudio *audio = allocatePlayingAudio();
-	audio->m_audioEventRTS = event;
+	audio->m_audioEventRTS = req->m_pendingEvent;
 
 	// Kill existing sound if handleToKill is set
 	if (handleToKill) {
@@ -512,6 +537,8 @@ void MiniAudioManager::playAudioEvent(AudioEventRTS *event)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::stopAudioEvent(AudioHandle handle)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	std::list<PlayingAudio *>::iterator it;
 
 	// Handle special music stop commands
@@ -547,6 +574,8 @@ void MiniAudioManager::stopAudioEvent(AudioHandle handle)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::killAudioEventImmediately(AudioHandle audioEvent)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	// First look for it in the request list.
 	std::list<AudioRequest *>::iterator ait;
 	for (ait = m_audioRequests.begin(); ait != m_audioRequests.end(); ait++)
@@ -577,6 +606,8 @@ void MiniAudioManager::killAudioEventImmediately(AudioHandle audioEvent)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::pauseAudioEvent(AudioHandle handle)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	// TODO: implement individual sound pause
 }
 
@@ -623,16 +654,14 @@ void MiniAudioManager::releasePlayingAudio(PlayingAudio *release)
 	}
 
 	releaseMiniAudioHandles(release);
-
-	if (release->m_cleanupAudioEventRTS) {
-		releaseAudioEventRTS(release->m_audioEventRTS);
-	}
 	delete release;
 }
 
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::stopAllAudioImmediately(void)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	std::list<PlayingAudio *>::iterator it;
 	PlayingAudio *playing;
 
@@ -658,6 +687,8 @@ void MiniAudioManager::stopAllAudioImmediately(void)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::freeAllMiniAudioHandles(void)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	ma_engine_stop(&m_engine);
 }
 
@@ -685,6 +716,8 @@ void MiniAudioManager::adjustPlayingVolume(PlayingAudio *audio)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::stopAllSpeech(void)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	std::list<PlayingAudio *>::iterator it;
 	for (it = m_playingSounds.begin(); it != m_playingSounds.end(); ) {
 		PlayingAudio *playing = (*it);
@@ -753,7 +786,7 @@ Bool MiniAudioManager::hasMusicTrackCompleted(const AsciiString &trackName, Int 
 AsciiString MiniAudioManager::getMusicTrackName(void) const
 {
 	for (auto ait = m_audioRequests.begin(); ait != m_audioRequests.end(); ++ait) {
-		if ((*ait)->m_request != AR_Play || !(*ait)->m_usePendingEvent) continue;
+		if ((*ait)->m_request != AR_Play || !(*ait)->m_pendingEvent) continue;
 		if ((*ait)->m_pendingEvent->getAudioEventInfo()->m_soundType == AT_Music)
 			return (*ait)->m_pendingEvent->getEventName();
 	}
@@ -851,6 +884,8 @@ void MiniAudioManager::openDevice(void)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::closeDevice(void)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	// Stop all audio first to prevent use-after-free in audio callbacks
 	stopAllAudioImmediately();
 
@@ -874,7 +909,7 @@ Bool MiniAudioManager::isCurrentlyPlaying(AudioHandle handle)
 	}
 	for (auto ait = m_audioRequests.begin(); ait != m_audioRequests.end(); ++ait) {
 		AudioRequest *req = *ait;
-		if (req && req->m_usePendingEvent && req->m_pendingEvent->getPlayingHandle() == handle)
+		if (req && req->m_pendingEvent && req->m_pendingEvent->getPlayingHandle() == handle)
 			return true;
 	}
 	return false;
@@ -883,6 +918,8 @@ Bool MiniAudioManager::isCurrentlyPlaying(AudioHandle handle)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::notifyOfAudioCompletion(UnsignedInt audioCompleted, UnsignedInt flags)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	PlayingAudio *playing = findPlayingAudioFrom(audioCompleted, flags);
 	if (!playing) return;
 	if (!playing->m_audioEventRTS || !playing->m_audioEventRTS->getAudioEventInfo()) return;
@@ -999,7 +1036,7 @@ Bool MiniAudioManager::doesViolateLimit(AudioEventRTS *event) const
 	}
 	for (auto arIt = m_audioRequests.begin(); arIt != m_audioRequests.end(); ++arIt) {
 		AudioRequest *req = (*arIt);
-		if (req && req->m_usePendingEvent &&
+		if (req && req->m_pendingEvent &&
 			req->m_pendingEvent->getEventName() == event->getEventName()) {
 			totalRequestCount++;
 			totalCount++;
@@ -1058,7 +1095,7 @@ AudioEventRTS *MiniAudioManager::findLowestPrioritySound(AudioEventRTS *event)
 	AudioPriority lowestPriority = AP_LOWEST;
 
 	for (auto it = m_playingSounds.begin(); it != m_playingSounds.end(); ++it) {
-		AudioEventRTS *itEvent = (*it)->m_audioEventRTS;
+		AudioEventRTS *itEvent = (*it)->m_audioEventRTS.Peek();
 		if (!itEvent) continue;
 		const AudioEventInfo *itInfo = itEvent->getAudioEventInfo();
 		if (!itInfo) continue;
@@ -1094,13 +1131,15 @@ Bool MiniAudioManager::isPlayingLowerPriority(AudioEventRTS *event) const
 //-------------------------------------------------------------------------------------------------
 Bool MiniAudioManager::killLowestPrioritySoundImmediately(AudioEventRTS *event)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	AudioEventRTS *lowestPriorityEvent = findLowestPrioritySound(event);
 	if (!lowestPriorityEvent) return FALSE;
 
 	for (auto it = m_playingSounds.begin(); it != m_playingSounds.end(); ++it) {
 		PlayingAudio *playing = (*it);
 		if (!playing) continue;
-		if (playing->m_audioEventRTS && playing->m_audioEventRTS == lowestPriorityEvent) {
+		if (playing->m_audioEventRTS && playing->m_audioEventRTS.Peek() == lowestPriorityEvent) {
 			releasePlayingAudio(playing);
 			m_playingSounds.erase(it);
 			return TRUE;
@@ -1112,6 +1151,8 @@ Bool MiniAudioManager::killLowestPrioritySoundImmediately(AudioEventRTS *event)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::adjustVolumeOfPlayingAudio(AsciiString eventName, Real newVolume)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	for (auto it = m_playingSounds.begin(); it != m_playingSounds.end(); ++it) {
 		PlayingAudio *playing = *it;
 		if (playing && playing->m_audioEventRTS && playing->m_audioEventRTS->getEventName() == eventName) {
@@ -1124,6 +1165,8 @@ void MiniAudioManager::adjustVolumeOfPlayingAudio(AsciiString eventName, Real ne
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::removePlayingAudio(AsciiString eventName)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	for (auto it = m_playingSounds.begin(); it != m_playingSounds.end(); ) {
 		PlayingAudio *playing = *it;
 		if (playing && playing->m_audioEventRTS && playing->m_audioEventRTS->getEventName() == eventName) {
@@ -1137,6 +1180,8 @@ void MiniAudioManager::removePlayingAudio(AsciiString eventName)
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::removeAllDisabledAudio(void)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	for (auto it = m_playingSounds.begin(); it != m_playingSounds.end(); ) {
 		PlayingAudio *playing = *it;
 		if (playing && playing->m_audioEventRTS && playing->m_audioEventRTS->getVolume() == 0.0f) {
@@ -1199,7 +1244,7 @@ void MiniAudioManager::processPlayingList(void)
 
 		// Update 3D position for positional sounds
 		if (playing->m_type == PAT_3DSample && playing->m_audioEventRTS) {
-			const Coord3D *pos = getCurrentPositionFromEvent(playing->m_audioEventRTS);
+			const Coord3D *pos = getCurrentPositionFromEvent(playing->m_audioEventRTS.Peek());
 			if (pos && playing->m_sound) {
 				ma_sound_set_position(playing->m_sound, pos->x, pos->y, pos->z);
 			}
@@ -1208,8 +1253,14 @@ void MiniAudioManager::processPlayingList(void)
 		++it;
 	}
 
-	if (m_volumeHasChanged)
+	if (m_volumeHasChanged) {
 		m_volumeHasChanged = false;
+
+		// GeneralsX @bugfix Push speech volume changes because movie audio bypasses the audio mixer
+		if (TheVideoPlayer) {
+			TheVideoPlayer->setVolume(getVolume(AudioAffect_Speech));
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1230,7 +1281,7 @@ void MiniAudioManager::processFadingList(void)
 		}
 
 		++playing->m_framesFaded;
-		Real volume = getEffectiveVolume(playing->m_audioEventRTS);
+		Real volume = getEffectiveVolume(playing->m_audioEventRTS.Peek());
 		volume *= (1.0f - 1.0f * playing->m_framesFaded / getAudioSettings()->m_fadeAudioFrames);
 
 		if (playing->m_sound)
@@ -1253,7 +1304,7 @@ void MiniAudioManager::processStoppedList(void)
 //-------------------------------------------------------------------------------------------------
 Bool MiniAudioManager::shouldProcessRequestThisFrame(AudioRequest *req) const
 {
-	if (!req->m_usePendingEvent) return true;
+	if (!req->m_pendingEvent) return true;
 	if (req->m_pendingEvent->getDelay() < MSEC_PER_LOGICFRAME_REAL) return true;
 	return false;
 }
@@ -1261,7 +1312,7 @@ Bool MiniAudioManager::shouldProcessRequestThisFrame(AudioRequest *req) const
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::adjustRequest(AudioRequest *req)
 {
-	if (!req->m_usePendingEvent) return;
+	if (!req->m_pendingEvent) return;
 	req->m_pendingEvent->decrementDelay(MSEC_PER_LOGICFRAME_REAL);
 	req->m_requiresCheckForSample = true;
 }
@@ -1269,12 +1320,12 @@ void MiniAudioManager::adjustRequest(AudioRequest *req)
 //-------------------------------------------------------------------------------------------------
 Bool MiniAudioManager::checkForSample(AudioRequest *req)
 {
-	if (!req->m_usePendingEvent) return true;
+	if (!req->m_pendingEvent) return true;
 	if (req->m_pendingEvent->getAudioEventInfo() == NULL)
-		getInfoForAudioEvent(req->m_pendingEvent);
+		getInfoForAudioEvent(req->m_pendingEvent.Peek());
 	if (req->m_pendingEvent->getAudioEventInfo()->m_type != AT_SoundEffect)
 		return true;
-	return m_sound->canPlayNow(req->m_pendingEvent);
+	return m_sound->canPlayNow(req->m_pendingEvent.Peek());
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1292,6 +1343,8 @@ void MiniAudioManager::setSpeakerSurround(Bool surround)
 //-------------------------------------------------------------------------------------------------
 Real MiniAudioManager::getFileLengthMS(AsciiString strToLoad) const
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	if (strToLoad.isEmpty()) return 0.0f;
 
 	static ma_vfs_callbacks vfs = {};
@@ -1325,28 +1378,11 @@ Real MiniAudioManager::getFileLengthMS(AsciiString strToLoad) const
 //-------------------------------------------------------------------------------------------------
 void MiniAudioManager::closeAnySamplesUsingFile(const void *fileToClose)
 {
+	// GeneralsX @bugfix meerzulee 19/07/2026 FP env guard for audio entry point (see #215)
+	ScopedFPUGuard fpuGuard;
 	// miniaudio manages file lifecycle internally after decoding
 }
 
-//-------------------------------------------------------------------------------------------------
-Bool MiniAudioManager::has3DSensitiveStreamsPlaying(void) const
-{
-	if (m_playingSounds.empty()) return FALSE;
-
-	for (auto it = m_playingSounds.begin(); it != m_playingSounds.end(); ++it) {
-		const PlayingAudio *playing = (*it);
-		if (!playing || !playing->m_audioEventRTS) continue;
-
-		if (playing->m_type != PAT_Stream) continue;
-
-		const AudioEventInfo *info = playing->m_audioEventRTS->getAudioEventInfo();
-		if (!info) continue;
-
-		if (info->m_soundType != AT_Music) return TRUE;
-		if (playing->m_audioEventRTS->getEventName().startsWith("Game_") == FALSE) return TRUE;
-	}
-	return FALSE;
-}
 
 //-------------------------------------------------------------------------------------------------
 Bool MiniAudioManager::startNextLoop(PlayingAudio *looping)
@@ -1357,10 +1393,9 @@ Bool MiniAudioManager::startNextLoop(PlayingAudio *looping)
 	looping->m_audioEventRTS->generateFilename();
 
 	if (looping->m_audioEventRTS->getDelay() > MSEC_PER_LOGICFRAME_REAL) {
-		looping->m_cleanupAudioEventRTS = false;
 		looping->m_requestStop = true;
 
-		AudioRequest *req = allocateAudioRequest(true);
+		AudioRequest *req = allocateAudioRequest();
 		req->m_pendingEvent = looping->m_audioEventRTS;
 		req->m_requiresCheckForSample = true;
 		appendAudioRequest(req);
@@ -1450,7 +1485,7 @@ void MiniAudioManager::processRequest(AudioRequest *req)
 {
 	switch (req->m_request)
 	{
-	case AR_Play:   playAudioEvent(req->m_pendingEvent); break;
+	case AR_Play:   playAudioEvent(req); break;
 	case AR_Pause:  pauseAudioEvent(req->m_handleToInteractOn); break;
 	case AR_Stop:   stopAudioEvent(req->m_handleToInteractOn); break;
 	}
@@ -1476,18 +1511,20 @@ void MiniAudioManager::friend_forcePlayAudioEventRTS(const AudioEventRTS *eventT
 	case AT_Streaming: if (!isOn(AudioAffect_Speech)) return; break;
 	}
 
-	AudioEventRTS *event = NEW AudioEventRTS(*eventToPlay);
-	event->generateFilename();
-	event->generatePlayInfo();
+	AudioRequest *req = allocateAudioRequest();
+	req->m_pendingEvent.Assign_No_Add_Ref(newInstance(DynamicAudioEventRTS)(*eventToPlay));
+	req->m_pendingEvent->generateFilename();
+	req->m_pendingEvent->generatePlayInfo();
 
 	for (auto it = m_adjustedVolumes.begin(); it != m_adjustedVolumes.end(); ++it) {
-		if (it->first == event->getEventName()) {
-			event->setVolume(it->second);
+		if (it->first == req->m_pendingEvent->getEventName()) {
+			req->m_pendingEvent->setVolume(it->second);
 			break;
 		}
 	}
 
-	playAudioEvent(event);
+	playAudioEvent(req);
+	releaseAudioRequest(req);
 }
 
 #if defined(_DEBUG) || defined(_INTERNAL)

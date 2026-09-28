@@ -26,7 +26,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
 #include "Compression.h"
-#include "strtok_r.h"
+#include "WWLib/strtok_r.h"
 #include "Common/AudioEventRTS.h"
 #include "Common/CRCDebug.h"
 #include "Common/Debug.h"
@@ -53,7 +53,7 @@
 #include "GameLogic/VictoryConditions.h"
 #include "GameClient/DisconnectMenu.h"
 #include "GameClient/InGameUI.h"
-#include "TARGA.h"
+#include "WWLib/TARGA.h"
 
 static Bool hasValidTransferFileExtension(const AsciiString& filePath)
 {
@@ -178,9 +178,9 @@ static Bool hasValidTransferFileContent(const AsciiString& filePath, const Unsig
 		}
 		TGA2Footer footer;
 		memcpy(&footer, data + dataSize - sizeof(footer), sizeof(footer));
-		const Bool isTGA2 = memcmp(footer.Signature, TGA2_SIGNATURE, sizeof(footer.Signature)) == 0
-			&& footer.RsvdChar == '.'
-			&& footer.BZST == '\0';
+		const Bool isTGA2 = memcmp(footer.Signature, TGA2_SIGNATURE, sizeof(footer.Signature)) == 0 &&
+			footer.RsvdChar == '.' &&
+			footer.BZST == '\0';
 		if (!isTGA2)
 		{
 			DEBUG_LOG(("TGA file '%s' is missing TRUEVISION-XFILE footer signature.", filePath.str()));
@@ -459,71 +459,51 @@ void ConnectionManager::destroyGameMessages() {
  * assumption that a command will only be relayed once.
  */
 void ConnectionManager::doRelay() {
-	static Int numPackets = 0;
-	static Int numCommands = 0;
-
-	NetPacket *packet = nullptr;
-
-	for (Int i = 0; i < MAX_MESSAGES; ++i) {
-		if (m_transport->m_inBuffer[i].length != 0) {
+	for (size_t i = 0; i < ARRAY_SIZE(m_transport->m_inBuffer); ++i) {
+		if (m_transport->m_inBuffer[i].length > 0) {
 			// This transport buffer has yet to be processed.
 
 			// make a NetPacket out of this data so it can be broken up into individual commands.
-			packet = newInstance(NetPacket)(&(m_transport->m_inBuffer[i]));
+			NetPacket packet(m_transport->m_inBuffer[i]);
 
-			//DEBUG_LOG(("ConnectionManager::doRelay() - got a packet with %d commands", packet->getNumCommands()));
-			//LOGBUFFER( packet->getData(), packet->getLength() );
+			//DEBUG_LOG(("ConnectionManager::doRelay() - got a packet with %d commands", packet.getNumCommands()));
+			//LOGBUFFER( packet.getData(), packet.getLength() );
 
 			// Get the command list from the packet.
-			NetCommandList *cmdList = packet->getCommandList();
-			NetCommandRef *cmd = cmdList->getFirstMessage();
+			NetCommandList *cmdList = packet.getCommandList();
 
 			// Iterate through the commands in this packet and send them to the proper connections.
-			while (cmd != nullptr) {
+			for (NetCommandRef* cmd = cmdList->getFirstMessage(); cmd; cmd = cmd->getNext()) {
 				//DEBUG_LOG(("ConnectionManager::doRelay() - Looking at a command of type %s",
 					//GetNetCommandTypeAsString(cmd->getCommand()->getNetCommandType())));
+
 				if (CommandRequiresAck(cmd->getCommand())) {
 					ackCommand(cmd, m_localSlot);
 				}
 				if (!processNetCommand(cmd)) {
 					sendRemoteCommand(cmd);
 				}
-				cmd = cmd->getNext();
-
-				++numCommands;
 			}
-			++numPackets;
-
-			// Delete this packet since we won't be needing it anymore.
-			deleteInstance(packet);
-			packet = nullptr;
 
 			deleteInstance(cmdList);
 			cmdList = nullptr;
 
 			// signal that this has been processed.
 			m_transport->m_inBuffer[i].length = 0;
+		} else {
+			break;
 		}
 	}
 
 	NetCommandList *cmdList = m_netCommandWrapperList->getReadyCommands();
-	NetCommandRef *cmd = cmdList->getFirstMessage();
-	while (cmd != nullptr) {
+	for (NetCommandRef* cmd = cmdList->getFirstMessage(); cmd; cmd = cmd->getNext()) {
 		if (CommandRequiresAck(cmd->getCommand())) {
 			ackCommand(cmd, m_localSlot);
 		}
 		if (!processNetCommand(cmd)) {
 			sendRemoteCommand(cmd);
 		}
-		cmd = cmd->getNext();
-
-		++numCommands;
 	}
-	++numPackets;
-
-	// Delete this packet since we won't be needing it anymore.
-	deleteInstance(packet);
-	packet = nullptr;
 
 	deleteInstance(cmdList);
 	cmdList = nullptr;
@@ -774,9 +754,7 @@ void ConnectionManager::processChat(NetChatCommandMsg *msg)
 	unitext.format(L"[%ls] %ls", name.str(), msg->getText().str());
 //	DEBUG_LOG(("ConnectionManager::processChat - got message from player %d (mask %8.8X), message is %ls", playerID, msg->getPlayerMask(), unitext.str()));
 
-	AsciiString playerName;
-	playerName.format("player%d", msg->getPlayerID());
-	const Player *player = ThePlayerList->findPlayerWithNameKey( TheNameKeyGenerator->nameToKey( playerName ) );
+	const Player *player = ThePlayerList->getPlayerFromSlotIndex(playerID);
 	if (!player)
 	{
 		TheInGameUI->message(L"%ls", unitext.str());
@@ -2554,7 +2532,8 @@ void ConnectionManager::sendSingleFrameToPlayer(UnsignedInt playerID, UnsignedIn
 
 	DEBUG_LOG_LEVEL(DEBUG_LEVEL_NET, ("ConnectionManager::sendFrameDataToPlayer - sending data for frame %d", frame));
 	for (Int i = 0; i < MAX_SLOTS; ++i) {
-		if ((m_frameData[i] != nullptr) && (i != playerID)) { // no need to send his own commands to him.
+		if ((m_frameData[i] != nullptr) && (i != playerID)) {
+			// no need to send his own commands to him.
 			NetCommandList *list = m_frameData[i]->getFrameCommandList(frame);
 			if (list != nullptr) {
 				NetCommandRef *ref = list->getFirstMessage();

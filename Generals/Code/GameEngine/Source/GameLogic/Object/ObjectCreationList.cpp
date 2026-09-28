@@ -324,9 +324,9 @@ public:
 
 			Coord3D startPos = *primary;
 			Coord3D moveToPos = *secondary;
-			startPos.add( &offset );
+			startPos.add( offset );
 			//Also give our moveToPos the same offset to maintain perfect formation.
-			moveToPos.add( &offset );
+			moveToPos.add( offset );
 
 			Coord3D targetPos = *secondary;
 
@@ -1258,7 +1258,8 @@ protected:
 			if (m_nameAreObjects)
 				tmpl = TheThingFactory->findTemplate(m_names[pick]);
 			else
-			{	//this is using the generic debris type so it's probably safe to
+			{
+				//this is using the generic debris type so it's probably safe to
 				//remove if requested by the GameLOD manager.
 				if (TheGameLODManager->isDebrisSkipped())
 					continue;
@@ -1359,7 +1360,10 @@ protected:
 			if (TheGlobalData->m_preloadAssets)
 				debrisModelNamesGlobalHack.push_back(token);
 			debrisNugget->m_names.push_back(AsciiString(token));
+
+#if RETAIL_COMPATIBLE_CRC
 			token = ini->getNextTokenOrNull();
+#endif
 		}
 	}
 

@@ -48,13 +48,13 @@
 #include "dx8fvf.h"
 #include "dx8caps.h"
 #include "dx8rendererdebugger.h"
-#include "wwdebug.h"
-#include "wwprofile.h"
-#include "wwmemlog.h"
+#include "WWDebug/wwdebug.h"
+#include "WWDebug/wwprofile.h"
+#include "WWDebug/wwmemlog.h"
 #include "rinfo.h"
 #include "statistics.h"
 #include "meshmdl.h"
-#include "vp.h"
+#include "WWMath/vp.h"
 #include "decalmsh.h"
 #include "matpass.h"
 #include "camera.h"
@@ -242,6 +242,7 @@ void DX8TextureCategoryClass::Add_Polygon_Renderer(DX8PolygonRendererClass* p_re
 
 	if (add_after_this != nullptr) {
 		bool res = PolygonRendererList.Add_After(p_renderer,add_after_this,false);
+		(void)res;
 		WWASSERT(res);
 	} else {
 		PolygonRendererList.Add(p_renderer);
@@ -303,7 +304,8 @@ void DX8FVFCategoryContainer::Render_Procedural_Material_Passes()
    		MeshClass * mesh = mpr->Peek_Mesh();
 
    		if (mesh->Get_Base_Vertex_Offset() == VERTEX_BUFFER_OVERFLOW)	//check if this mesh is valid
-   		{	//skip this mesh so it gets rendered later after vertices are filled in.
+   		{
+	        //skip this mesh so it gets rendered later after vertices are filled in.
 	        last_mpr = mpr;
    			mpr = mpr->Get_Next_Visible();
    			renderTasksRemaining = true;
@@ -730,7 +732,8 @@ unsigned DX8FVFCategoryContainer::Define_FVF(MeshModelClass* mmc,bool enable_lig
 	case 8: fvf|=D3DFVF_TEX8; break;
 	}
 
-	if (!mmc->Needs_Vertex_Normals()) {  //enable_lighting || mmc->Get_Flag(MeshModelClass::PRELIT_MASK)) {
+	if (!mmc->Needs_Vertex_Normals()) {
+		//enable_lighting || mmc->Get_Flag(MeshModelClass::PRELIT_MASK)) {
 		return fvf;
 	}
 
@@ -1217,7 +1220,9 @@ void DX8FVFCategoryContainer::Generate_Texture_Categories(Vertex_Split_Table& sp
 	for (unsigned pass=0;pass<split_table.Get_Pass_Count();++pass) {
 		Textures_Material_And_Shader_Booking_Struct textures_material_and_shader_booking;
 
+#ifdef DEBUG_CRASHING
 		unsigned old_used_indices=used_indices;
+#endif
 
 		for (int i=0;i<polygon_count;++i) {
 			TextureClass* textures[MeshMatDescClass::MAX_TEX_STAGES];
@@ -1234,8 +1239,10 @@ void DX8FVFCategoryContainer::Generate_Texture_Categories(Vertex_Split_Table& sp
 			Insert_To_Texture_Category(split_table,textures,mat,shader,pass,vertex_offset);
 		}
 
+#ifdef DEBUG_CRASHING
 		int new_inds=used_indices-old_used_indices;
 		WWASSERT(new_inds<=polygon_count*3);
+#endif
 	}
 }
 
@@ -1285,59 +1292,6 @@ void DX8SkinFVFCategoryContainer::Log(bool only_visible)
 
 // ----------------------------------------------------------------------------
 
-#include <fstream>
-#include <iostream>
-
-void LogSkinRender(DX8TextureCategoryClass* category, int pass) {
-	static std::ofstream logfile("/Users/felipebraz/PhpstormProjects/pessoal/GeneralsX/logs/skin_render.log", std::ios::app);
-	if (logfile.is_open()) {
-		logfile << "--- Skin Render Pass " << pass << " ---\n";
-		VertexMaterialClass *vmaterial = const_cast<VertexMaterialClass*>(category->Peek_Material());
-		if (vmaterial) {
-			logfile << "  Material Name: " << (vmaterial->Get_Name() ? vmaterial->Get_Name() : "null") << "\n";
-			Vector3 amb, diff, emiss;
-			vmaterial->Get_Ambient(&amb);
-			vmaterial->Get_Diffuse(&diff);
-			vmaterial->Get_Emissive(&emiss);
-			logfile << "    Ambient: (" << amb.X << ", " << amb.Y << ", " << amb.Z << ")\n";
-			logfile << "    Diffuse: (" << diff.X << ", " << diff.Y << ", " << diff.Z << ")\n";
-			logfile << "    Emissive: (" << emiss.X << ", " << emiss.Y << ", " << emiss.Z << ")\n";
-			logfile << "    UseLighting: " << vmaterial->Get_Lighting() << "\n";
-			logfile << "    DiffuseSrc: " << vmaterial->Get_Diffuse_Color_Source() << "\n";
-			logfile << "    AmbientSrc: " << vmaterial->Get_Ambient_Color_Source() << "\n";
-		} else {
-			logfile << "  Material: null\n";
-		}
-		ShaderClass theShader = category->Get_Shader();
-		logfile << "  Shader bits: " << std::hex << theShader.Get_Bits() << std::dec << "\n";
-		logfile << "    Texturing: " << theShader.Get_Texturing() << "\n";
-		logfile << "    PrimaryGradient: " << theShader.Get_Primary_Gradient() << "\n";
-		logfile << "    SrcBlend: " << theShader.Get_Src_Blend_Func() << "\n";
-		logfile << "    DstBlend: " << theShader.Get_Dst_Blend_Func() << "\n";
-		TextureClass* tex0 = category->Peek_Texture(0);
-		logfile << "  Texture 0: " << (tex0 ? tex0->Get_Texture_Name().str() : "null") << "\n";
-		TextureClass* tex1 = category->Peek_Texture(1);
-		logfile << "  Texture 1: " << (tex1 ? tex1->Get_Texture_Name().str() : "null") << "\n";
-		
-		PolyRenderTaskClass * prt = category->render_task_head;
-		if (prt) {
-			MeshClass * mesh = prt->Peek_Mesh();
-			logfile << "  First Mesh in category: " << (mesh ? mesh->Get_Name() : "null") << "\n";
-			if (mesh && mesh->Peek_Model()) {
-				int vc = mesh->Peek_Model()->Get_Vertex_Count();
-				logfile << "    Vertex Count: " << vc << "\n";
-				const Vector3* normals = mesh->Peek_Model()->Get_Vertex_Normal_Array();
-				if (normals) {
-					logfile << "    First normal: (" << normals[0].X << ", " << normals[0].Y << ", " << normals[0].Z << ")\n";
-				} else {
-					logfile << "    Normals: null\n";
-				}
-			}
-		}
-		logfile << "\n";
-	}
-}
-
 void DX8SkinFVFCategoryContainer::Render()
 {
 	SNAPSHOT_SAY(("DX8SkinFVFCategoryContainer::Render()"));
@@ -1353,7 +1307,8 @@ void DX8SkinFVFCategoryContainer::Render()
 	//'Generals' customization to allow more than 65535 vertices
 	unsigned int maxVertexCount=VisibleVertexCount;
 	if (maxVertexCount > 65535)
-	{	//clamp vertex count to maximum size that can be indexed by 16-bit index
+	{
+		//clamp vertex count to maximum size that can be indexed by 16-bit index
 		maxVertexCount = 65535;
 	}
 
@@ -1380,7 +1335,8 @@ void DX8SkinFVFCategoryContainer::Render()
 				int mesh_vertex_count=mmc->Get_Vertex_Count();
 				//'Generals' mod to deal with cases where not all meshes fit in VB.
 				if (vertex_offset+mesh_vertex_count > maxVertexCount || remainingMesh)
-				{	//flag mesh so we know it didn't fit in the vertex buffer
+				{
+					//flag mesh so we know it didn't fit in the vertex buffer
 					mesh->Set_Base_Vertex_Offset(VERTEX_BUFFER_OVERFLOW);
 					if (remainingMesh == nullptr)
 						remainingMesh = mesh;	//start of meshes that didn't fit in buffer
@@ -1414,12 +1370,12 @@ void DX8SkinFVFCategoryContainer::Render()
 					verts[v].nx=(*norm)[0];
 					verts[v].ny=(*norm)[1];
 					verts[v].nz=(*norm)[2];
-					// Force diffuse to white (0xFFFFFFFF) because Base Game infantry 
-					// often have black vertex colors baked into their W3D files
-					// which causes them to render completely black in DXVK when D3DTA_DIFFUSE is used.
-					verts[v].diffuse=0xFFFFFFFF;
+					// GeneralsX @bugfix Copilot 24/08/2026 Preserve authored skin colors and use white only when no color array exists.
 					if (diffuse) {
-						diffuse++; // Advance the pointer if it exists, to keep it in sync if needed (though we only use it here)
+						verts[v].diffuse=*diffuse++;
+					}
+					else {
+						verts[v].diffuse=0xFFFFFFFF;
 					}
 
 					if (uv0) {
@@ -1459,30 +1415,15 @@ void DX8SkinFVFCategoryContainer::Render()
 		DX8Wrapper::Set_Index_Buffer(index_buffer,0);
 
 		//Flush the meshes which fit in the vertex buffer, applying all texture variations
-		// GeneralsX @bugfix fbraz3 19/06/2026 Force COLOR1 diffuse source and disable D3D lighting for skins.
-		// Skinned mesh verts have diffuse=0xFFFFFFFF baked in (see vertex fill loop above).
-		// With D3DRS_LIGHTING=TRUE and D3DMCS_MATERIAL, DXVK's lighting equation produces black
-		// when no LightEnvironment is set. Forcing COLOR1 makes D3DTA_DIFFUSE=vertex.diffuse=white,
-		// so MODULATE(texture, white)=texture - matching original VC6/D3D8 behavior.
-		DX8Wrapper::Apply_Render_State_Changes();
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_DIFFUSEMATERIALSOURCE, D3DMCS_COLOR1);
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_AMBIENTMATERIALSOURCE, D3DMCS_COLOR1);
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_LIGHTING, FALSE);
-
 		for (unsigned pass=0;pass<passes;++pass) {
 			SNAPSHOT_SAY(("Pass: %d",pass));
 
 			TextureCategoryListIterator it(&visible_texture_category_list[pass]);
 			while (!it.Is_Done()) {
-				LogSkinRender(it.Peek_Obj(), pass);
 				it.Peek_Obj()->Render();
 				it.Next();
 			}
 		}
-
-		// Restore render states to defaults after skin render
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_DIFFUSEMATERIALSOURCE, D3DMCS_MATERIAL);
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_AMBIENTMATERIALSOURCE, D3DMCS_MATERIAL);
 
 		Render_Procedural_Material_Passes();
 	}
@@ -1805,7 +1746,8 @@ void DX8TextureCategoryClass::Render()
 		MeshClass * mesh = prt->Peek_Mesh();
 
 		if (mesh->Get_Base_Vertex_Offset() == VERTEX_BUFFER_OVERFLOW)	//check if this mesh is valid
-		{	//skip this mesh so it gets rendered later after vertices are filled in.
+		{
+			//skip this mesh so it gets rendered later after vertices are filled in.
 			last_prt = prt;
 			prt = prt->Get_Next_Visible();
 			renderTasksRemaining = true;
@@ -1944,7 +1886,8 @@ void DX8TextureCategoryClass::Render()
 			//non-transparent mesh that will be rendered immediately.  Okay to adjust the shader/material
 			//if necessary
 			if (mesh->Get_Alpha_Override() != 1.0 || (mesh->Get_User_Data() && *(int *)mesh->Get_User_Data() == RenderObjClass::USER_DATA_MATERIAL_OVERRIDE))
-			{	//mesh has material override of some kind
+			{
+				//mesh has material override of some kind
 				//adjust the opacity of this model
 				float oldOpacity=vmaterial->Get_Opacity();
 				Vector3 oldDiffuse;
@@ -1965,7 +1908,8 @@ void DX8TextureCategoryClass::Render()
 				if (mesh->Get_Alpha_Override() != 1.0)
 				{
 					if (mesh->Is_Additive())
-					{	//additvie blended mesh can't switch to alpha or we will get a black outline.
+					{
+						//additvie blended mesh can't switch to alpha or we will get a black outline.
 						//so adjust diffuse color instead.
 						vmaterial->Set_Diffuse(mesh->Get_Alpha_Override(),mesh->Get_Alpha_Override(),mesh->Get_Alpha_Override());
 						theAlphaShader = theShader;	//keep using additive blending.
@@ -2348,7 +2292,6 @@ void DX8MeshRendererClass::Invalidate( bool shutdown)
 
 	texture_category_container_lists_rigid.Delete_All();
 }
-
 
 
 

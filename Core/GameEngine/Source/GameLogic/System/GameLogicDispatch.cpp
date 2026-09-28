@@ -295,6 +295,15 @@ void GameLogic::clearGameData( Bool showScoreScreen )
 
 	TheGameEngine->reset();
 	setGameMode(GAME_NONE);
+	// GeneralsX @bugfix fbraz3 22/09/2026 Ensure replay playback is terminated when match data is cleared (#315)
+	if (TheRecorder && TheRecorder->isPlaybackMode())
+	{
+		TheRecorder->stopPlayback();
+	}
+	// GeneralsX @feature felipebraz 17/09/2026 Reset simulation tick rate and FPS cap to global defaults (#281)
+	TheFramePacer->setLogicTimeScaleFps(LOGICFRAMES_PER_SECOND);
+	TheFramePacer->setFramesPerSecondLimit(TheGlobalData->m_framesPerSecondLimit);
+	TheFramePacer->enableLogicTimeScale(LOGICFRAMES_PER_SECOND < TheGlobalData->m_framesPerSecondLimit);
 //	m_background->bringForward();
 //	if(shellGame)
 
@@ -895,6 +904,31 @@ bool GameLogic::onNewGame(MAYBE_UNUSED GameMessage *msg)
 		DEBUG_LOG(("Setting max FPS limit to %d FPS", maxFPS));
 		TheFramePacer->setFramesPerSecondLimit(maxFPS);
 		TheWritableGlobalData->m_useFpsLimit = true;
+	}
+
+	// GeneralsX @feature felipebraz 17/09/2026 Apply configured Skirmish simulation tick rate (#281)
+	if (gameMode == GAME_SKIRMISH)
+	{
+		Int tickRate = TheGlobalData->m_skirmishTickRate;
+		if (tickRate <= 0)
+			tickRate = LOGICFRAMES_PER_SECOND;
+
+		// Ensure render FPS limit is at least equal to logic tick rate so simulation is not starved
+		if (TheFramePacer->getFramesPerSecondLimit() < tickRate)
+		{
+			TheFramePacer->setFramesPerSecondLimit(tickRate);
+		}
+
+		TheFramePacer->setLogicTimeScaleFps(tickRate);
+		TheFramePacer->enableLogicTimeScale(tickRate < TheFramePacer->getFramesPerSecondLimit());
+
+		fprintf(stderr, "[SKIRMISH] Simulation tick rate configured: %d Hz (base: %d Hz)\n", tickRate, LOGICFRAMES_PER_SECOND);
+		fflush(stderr);
+	}
+	else
+	{
+		TheFramePacer->setLogicTimeScaleFps(LOGICFRAMES_PER_SECOND);
+		TheFramePacer->enableLogicTimeScale(LOGICFRAMES_PER_SECOND < TheFramePacer->getFramesPerSecondLimit());
 	}
 
 	// prepare for new game
@@ -2079,7 +2113,7 @@ bool GameLogic::onPlaceBeacon(MAYBE_UNUSED GameMessage *msg)
 	Coord3D pos = msg->getArgument( 0 )->location;
 	Region3D r;
 	TheTerrainLogic->getExtent(&r);
-	if (!r.isInRegionNoZ(&pos))
+	if (!r.isInRegionNoZ(pos))
 		pos = TheTerrainLogic->findClosestEdgePoint(&pos);
 	const ThingTemplate *thing = TheThingFactory->findTemplate( msgPlayer->getPlayerTemplate()->getBeaconTemplate() );
 
@@ -2302,6 +2336,14 @@ bool GameLogic::onSelfDestruct(MAYBE_UNUSED GameMessage *msg)
 		msgPlayer->killPlayer();
 	}
 
+	// ignore CRC messages when a player is defeated
+	// because there's a mismatch risk at low NET_CRC_INTERVAL values
+	// example: runahead decreases, clients are expected to send more frames
+	// defeated player sends some but not the required number of frames (and CRC messages);
+	// the game mismatches because it only retains the most recent CRC value
+	// and the CRC value from the defeated player is not up-to-date
+	m_shouldValidateCRCs = -1;
+
 	// There is no reason to do any notification here, it now takes place in the victory conditions.
 	// bonehead.
 
@@ -2393,18 +2435,17 @@ bool GameLogic::onLogicCrc(MAYBE_UNUSED GameMessage *msg)
 	Player *msgPlayer = getMessagePlayer(msg);
 	if (TheNetwork)
 	{
-		Int slotIndex = -1;
-		for (Int i=0; i<MAX_SLOTS; ++i)
+		if (msgPlayer->getPlayerType() != PLAYER_HUMAN)
 		{
-			if (msgPlayer->getPlayerType() == PLAYER_HUMAN && TheNetwork->getPlayerName(i) == msgPlayer->getPlayerDisplayName())
-			{
-				slotIndex = i;
-				break;
-			}
+			return false;
 		}
 
+		// GeneralsX @bugfix felipebraz 05/07/2026 Use pre-computed slot index to avoid string comparisons
+		const Int slotIndex = ThePlayerList->getSlotIndex(msgPlayer->getPlayerIndex());
 		if (slotIndex < 0 || !TheNetwork->isPlayerConnected(slotIndex))
+		{
 			return false;
+		}
 
 		if (msgPlayer->isLocalPlayer())
 		{
@@ -2413,7 +2454,8 @@ bool GameLogic::onLogicCrc(MAYBE_UNUSED GameMessage *msg)
 			if (!TheDebugIgnoreSyncErrors)
 			{
 #endif
-				m_shouldValidateCRCs = TRUE;
+				if (m_shouldValidateCRCs != -1)
+					m_shouldValidateCRCs = 1;
 #if defined(RTS_DEBUG)
 			}
 #endif

@@ -88,6 +88,10 @@
 #include "GameClient/ClientInstance.h"
 #include "GameClient/FXList.h"
 #include "GameClient/GameClient.h"
+
+#ifdef SAGE_USE_NGMP
+#include "GameNetwork/GeneralsOnline/OnlineServices_Manager.h"
+#endif
 #include "GameClient/Keyboard.h"
 #include "GameClient/Shell.h"
 #include "GameClient/GameText.h"
@@ -278,6 +282,10 @@ GameEngine::~GameEngine()
 //	TheShell = nullptr;
 
 	TheGameResultsQueue->endThreads();
+
+#ifdef SAGE_USE_NGMP
+	NGMP_OnlineServicesManager::getInstance().shutdown();
+#endif
 
 	// TheSuperHackers @fix helmutbuhler 03/06/2025
 	// Reset all subsystems before deletion to prevent crashing due to cross dependencies.
@@ -471,6 +479,8 @@ void GameEngine::init()
 	// GeneralsX @feature felipebraz 08/06/2026 Auto-create SagePatch.ini in user data dir with defaults.
 	// This replaces the run.sh copy approach with engine-managed defaults.
 	{
+		static const char *const USER_GAME_DATA_INI_PATH = "Data\\INI\\GameData.ini";
+
 		AsciiString sagePatchPath = TheWritableGlobalData->getPath_UserData();
 		sagePatchPath.concat("SagePatch.ini");
 
@@ -483,8 +493,9 @@ void GameEngine::init()
 				"; -----------------------------------------------------------------------------\n"
 				"; SagePatch - Casual QoL overrides for GeneralsX\n"
 				";\n"
-				"; Loaded by the engine after the BIG-archived Data/INI/GameData.ini, so values\n"
-				"; here override (not append to) the originals.\n"
+				"; Loaded by the engine after the BIG-archived Data/INI/GameData.ini, so values here\n"
+				"; override (not append to) the originals. A loose Data/INI/GameData.ini that you author\n"
+				"; yourself is applied after this file and therefore still wins over it.\n"
 				"; -----------------------------------------------------------------------------\n"
 				"\n"
 				"GameData\n"
@@ -496,7 +507,7 @@ void GameEngine::init()
 					"  EnforceMaxCameraHeight = No\n"
 					"  ; Keyboard scroll - vanilla 0.5 is sluggish, double it.\n"
 					"  KeyboardScrollSpeedFactor = 1.0\n"
-					"  ; ~5% more terrain drawn at max zoom to fix terrain pop-in.\n"
+					"  ; ~5%% more terrain drawn at max zoom to fix terrain pop-in.\n"
 					"  TerrainDrawDistanceScale = 1.05\n"
 					// GeneralsX @tweak felipebraz 20/06/2026 Default render FPS limit to 60 FPS in SagePatch.ini
 					"  UseFPSLimit = Yes\n"
@@ -539,6 +550,15 @@ void GameEngine::init()
 			}
 
 			ini.load(sagePatchPath, INI_LOAD_OVERWRITE, nullptr);
+
+			// GeneralsX @bugfix kumait 13/08/2026 SagePatch defaults must not clobber a user-authored
+			// Data/INI/GameData.ini. That loose file shadows the BIG-archived one when the engine loads
+			// GameData above, so replaying it here restores user precedence over SagePatch. Installs
+			// without a loose GameData.ini are unaffected, and the archived original is never reloaded.
+			if (TheLocalFileSystem->doesFileExist(USER_GAME_DATA_INI_PATH))
+			{
+				ini.load(USER_GAME_DATA_INI_PATH, INI_LOAD_OVERWRITE, nullptr);
+			}
 		}
 	}
 
@@ -688,6 +708,13 @@ void GameEngine::init()
 		initSubsystem(TheUpgradeCenter,"TheUpgradeCenter", MSGNEW("GameEngineSubsystem") UpgradeCenter, &xferCRC, "Data\\INI\\Default\\Upgrade", "Data\\INI\\Upgrade");
 		initSubsystem(TheGameClient,"TheGameClient", createGameClient(), nullptr);
 
+#ifdef SAGE_USE_NGMP
+		if (!TheGlobalData->m_headless)
+		{
+			NGMP_OnlineServicesManager::getInstance().init();
+		}
+#endif
+
 
 	#ifdef DUMP_PERF_STATS///////////////////////////////////////////////////////////////////////////
 	GetPrecisionTimer(&endTime64);//////////////////////////////////////////////////////////////////
@@ -725,7 +752,7 @@ void GameEngine::init()
 #endif
 
 #if defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
-		ini.loadFileDirectory("Data\\INI\\CommandMapDemo", INI_LOAD_MULTIFILE, nullptr);
+		ini.loadFileDirectory("Data\\INI\\CommandMapDemo", INI_LOAD_MULTIFILE, nullptr, INI::LoadFlags_SearchSubDirs); // Added in Zero Hour
 #endif
 
 		TheMetaMap->generateMetaMap();
@@ -840,9 +867,6 @@ void GameEngine::init()
 			}
 		}
 
-		if(!TheGlobalData->m_playIntro)
-			TheWritableGlobalData->m_afterIntro = TRUE;
-
 	}
 	catch (ErrorCode ec)
 	{
@@ -863,9 +887,6 @@ void GameEngine::init()
 	{
 		RELEASE_CRASH(("Uncaught Exception during initialization."));
 	}
-
-	if(!TheGlobalData->m_playIntro)
-		TheWritableGlobalData->m_afterIntro = TRUE;
 
 	resetSubsystems();
 
@@ -914,9 +935,9 @@ void GameEngine::resetSubsystems()
 }
 
 /// -----------------------------------------------------------------------------------------------
-Bool GameEngine::canUpdateGameLogic()
+Bool GameEngine::canUpdateGameLogic(UnsignedInt logicTimeQueryFlags)
 {
-	// Must be first.
+	// This updates the paused game status of the game logic.
 	TheGameLogic->preUpdate();
 
 	TheFramePacer->setTimeFrozen(isTimeFrozen());
@@ -928,7 +949,7 @@ Bool GameEngine::canUpdateGameLogic()
 	}
 	else
 	{
-		return canUpdateRegularGameLogic();
+		return canUpdateRegularGameLogic(logicTimeQueryFlags);
 	}
 }
 
@@ -949,11 +970,17 @@ Bool GameEngine::canUpdateNetworkGameLogic()
 }
 
 /// -----------------------------------------------------------------------------------------------
-Bool GameEngine::canUpdateRegularGameLogic()
+Bool GameEngine::canUpdateRegularGameLogic(UnsignedInt logicTimeQueryFlags)
 {
+	const Int logicTimeScaleFps = TheFramePacer->getActualLogicTimeScaleFps(logicTimeQueryFlags);
+
+	if (logicTimeScaleFps <= 0)
+	{
+		return false;
+	}
+
 	const Bool enabled = TheFramePacer->isLogicTimeScaleEnabled();
-	const Int logicTimeScaleFps = TheFramePacer->getLogicTimeScaleFps();
-	const Int maxRenderFps = TheFramePacer->getFramesPerSecondLimit();
+	const Int maxRenderFps = TheFramePacer->getActualFramesPerSecondLimit();
 
 #if defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
 	const Bool useFastMode = TheGlobalData->m_TiVOFastMode;
@@ -1009,22 +1036,24 @@ void GameEngine::update()
 			{
 				TheNetwork->UPDATE();
 			}
+
+#ifdef SAGE_USE_NGMP
+			if (!TheGlobalData->m_headless)
+			{
+				NGMP_OnlineServicesManager::getInstance().update();
+			}
+#endif
 		}
 
-		const Bool canUpdate = canUpdateGameLogic();
-		const Bool canUpdateLogic = canUpdate && !TheFramePacer->isGameHalted() && !TheFramePacer->isTimeFrozen();
-		const Bool canUpdateScript = canUpdate && !TheFramePacer->isGameHalted();
-
-		if (canUpdateLogic)
+		// TheSuperHackers @info Ignores frozen time because the script engine needs updating in the logic update regardless.
+		if (canUpdateGameLogic(FramePacer::IgnoreFrozenTime))
 		{
-			TheGameClient->step();
 			TheGameLogic->UPDATE();
-		}
-		else if (canUpdateScript)
-		{
-			// TheSuperHackers @info Still update the Script Engine to allow
-			// for scripted camera movements while the time is frozen.
-			TheScriptEngine->UPDATE();
+
+			if (!TheFramePacer->isTimeFrozen())
+			{
+				TheGameClient->step();
+			}
 		}
 	}
 }
@@ -1106,6 +1135,12 @@ void GameEngine::execute()
 				}
 			}
 
+			// TheFramePacer->update() sleeps here to hold the render FPS cap (RenderFpsPreset /
+			// GlobalData::m_framesPerSecondLimit). Because input is serviced once per iteration of
+			// this loop (SDL poll + GameClient::UPDATE message processing, above), this pacing wait
+			// also throttles the input sampling rate. A low FPS cap therefore makes the mouse feel
+			// laggy (hard to click moving units) even though the fixed 30 Hz simulation is unchanged.
+			// See RenderFpsPreset::s_fpsValues in FrameRateLimit.cpp for the full explanation.
 			TheFramePacer->update();
 
 			// NOTE: TheDisplay->draw() is called via TheGameClient->UPDATE() above.

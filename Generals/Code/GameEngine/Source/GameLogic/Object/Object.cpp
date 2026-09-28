@@ -174,7 +174,7 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	m_physics(nullptr),
 	m_geometryInfo(tt->getTemplateGeometryInfo()),
 	m_containedBy(nullptr),
-	m_containedByID(INVALID_ID),
+	m_xferContainedByID(INVALID_ID),
 	m_containedByFrame(0),
 	m_behaviors(nullptr),
 	m_body(nullptr),
@@ -255,8 +255,8 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 
 	m_constructionPercent = CONSTRUCTION_COMPLETE;  // complete by default
 
-	m_visionRange = tt->friend_getVisionRange();
-	m_shroudClearingRange = tt->friend_getShroudClearingRange();
+	m_visionRange = tt->friend_calcVisionRange();
+	m_shroudClearingRange = tt->friend_calcShroudClearingRange();
 	if( m_shroudClearingRange == -1.0f )
 		m_shroudClearingRange = m_visionRange;// Backwards compatible, and perfectly logical default to assign
 	m_shroudRange = 0.0f;
@@ -291,9 +291,9 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	m_smcHelper = newInstance(ObjectSMCHelper)(this, &smcModuleData);
 	*curB++ = m_smcHelper;
 
-	if (TheAI != nullptr
-			&& TheAI->getAiData()->m_enableRepulsors
-			&& isKindOf(KINDOF_CAN_BE_REPULSED))
+	if (TheAI != nullptr &&
+			TheAI->getAiData()->m_enableRepulsors &&
+			isKindOf(KINDOF_CAN_BE_REPULSED))
 	{
 		// if we can ever be a temporary-repulsor, make a repulsor helper. (srj)
 		static const NameKeyType repulsorHelperModuleDataTagNameKey = NAMEKEY( "ModuleTag_RepulsorHelper" );
@@ -623,21 +623,8 @@ void Object::onContainedBy( Object *containedBy )
 	m_containedBy = containedBy;
 	m_containedByFrame = TheGameLogic->getFrame();
 
-#if RETAIL_COMPATIBLE_CRC
-	// TheSuperHackers @info Set INVALID_ID if the container object was destroyed
-	// to indicate that the pointer will become a dangling pointer in the next frame.
-	if (containedBy && !containedBy->isDestroyed())
-	{
-		m_containedByID = containedBy->getID();
-	}
-	else
-	{
-		m_containedByID = INVALID_ID;
-	}
-#else
 	DEBUG_ASSERTCRASH(containedBy == nullptr || !containedBy->isDestroyed(),
-		("Object::onContainedBy - Adding into a destroyed container"));
-#endif
+		("Object::onContainedBy - Adding to a destroyed container"));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -648,10 +635,6 @@ void Object::onRemovedFrom( Object *removedFrom )
 	clearStatus( MAKE_OBJECT_STATUS_MASK2( OBJECT_STATUS_MASKED, OBJECT_STATUS_UNSELECTABLE ) );
 	m_containedBy = nullptr;
 	m_containedByFrame = 0;
-
-#if RETAIL_COMPATIBLE_CRC
-	m_containedByID = INVALID_ID;
-#endif
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -673,6 +656,15 @@ Int Object::getTransportSlotCount() const
 		}
 	}
 	return count;
+}
+
+void Object::friend_setContainedBy(Object* containedBy)
+{
+	m_containedBy = containedBy;
+
+#if !RETAIL_COMPATIBLE_CRC
+	m_containedByFrame = containedBy ? TheGameLogic->getFrame() : 0;
+#endif
 }
 
 const Object* Object::getEnclosingContainedBy() const
@@ -702,33 +694,9 @@ void Object::onDestroy()
 {
 
 	// This is the old cleanUpContain safeguard.  Say goodbye so they don't try to look us up.
-	if (m_containedBy)
+	if( m_containedBy && m_containedBy->getContain() )
 	{
-#if RETAIL_COMPATIBLE_CRC
-		if (m_containedByID == INVALID_ID)
-		{
-			// TheSuperHackers @bugfix Caball009 25/05/2026 Due to a potential use-after-free bug that cannot be fixed
-			// with retail compatibility, the 'contained by' pointer of this object may point to an already destroyed object.
-			// Avoid removing this object from the contain list, because it could crash the game,
-			// as the begin / end iterator for STLPort and MSVC std::list implementations depends on dynamically allocated memory.
-			DEBUG_CRASH(("container object must be valid; this looks like use-after-free"));
-		}
-		else
-		{
-			DEBUG_ASSERTCRASH(TheGameLogic->findObjectByID(m_containedByID) == m_containedBy,
-				("contained by pointer is out of sync with contained by ID"));
-
-			if (ContainModuleInterface* contain = m_containedBy->getContain())
-			{
-				contain->removeFromContain(this);
-			}
-		}
-#else
-		if (ContainModuleInterface* contain = m_containedBy->getContain())
-		{
-			contain->removeFromContain(this);
-		}
-#endif
+		m_containedBy->getContain()->removeFromContain( this );
 	}
 
 	//
@@ -1718,7 +1686,7 @@ void Object::reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPo
 
 		Region3D mapExtent;
 		TheTerrainLogic->getExtent(&mapExtent);
-		if (mapExtent.isInRegionNoZ(getPosition()))
+		if (mapExtent.isInRegionNoZ(*getPosition()))
 			m_privateStatus &= ~OFF_MAP;
 		else
 			m_privateStatus |= OFF_MAP;
@@ -1761,7 +1729,8 @@ void Object::attemptDamage( DamageInfo *damageInfo )
 			damageInfo->in.m_damageType != DAMAGE_HEALING &&
 			!BitIsSet(damageInfo->in.m_sourcePlayerMask, getControllingPlayer()->getPlayerMask()) &&
 			m_radarData != nullptr &&
-			isLocallyControlled() )
+			isLocallyControlled() &&
+			!isKindOf( KINDOF_NO_ATTACK_WARNING ) )
 		TheRadar->tryUnderAttackEvent( this );
 
 }
@@ -1792,7 +1761,8 @@ ObjectID Object::getSoleHealingBenefactor() const
 }
 
 Bool Object::attemptHealingFromSoleBenefactor ( Real amount, const Object* source, UnsignedInt duration )
-{///< for the non-stacking healers like ambulance and propaganda
+{
+	///< for the non-stacking healers like ambulance and propaganda
 
 	if( ! source ) // sanity
 		return FALSE;
@@ -2619,7 +2589,7 @@ void Object::friend_notifyOfNewMapBoundary()
 
 	Region3D mapExtent;
 	TheTerrainLogic->getExtent(&mapExtent);
-	if (mapExtent.isInRegionNoZ(getPosition()))
+	if (mapExtent.isInRegionNoZ(*getPosition()))
 		m_privateStatus &= ~OFF_MAP;
 	else
 		m_privateStatus |= OFF_MAP;
@@ -2809,11 +2779,11 @@ void Object::setSelectable(Bool selectable)
 //-------------------------------------------------------------------------------------------------
 Bool Object::isSelectable() const
 {
-	return getTemplate()->isKindOf(KINDOF_ALWAYS_SELECTABLE)
-				|| (m_isSelectable
-						&& !testStatus(OBJECT_STATUS_UNSELECTABLE)
-						&& !isEffectivelyDead()
-						&& !getTemplate()->isKindOf(KINDOF_DRONE)//Most drones are unselectable from being slaved, but the SpyDrone needs help
+	return getTemplate()->isKindOf(KINDOF_ALWAYS_SELECTABLE) ||
+				(m_isSelectable &&
+						!testStatus(OBJECT_STATUS_UNSELECTABLE) &&
+						!isEffectivelyDead() &&
+						!getTemplate()->isKindOf(KINDOF_NO_SELECT)
 						);
 }
 
@@ -2912,10 +2882,10 @@ void Object::onVeterancyLevelChanged( VeterancyLevel oldLevel, VeterancyLevel ne
 			break;
 	}
 
-	Bool doAnimation = provideFeedback
-		&& newLevel > oldLevel
-		&& !isKindOf(KINDOF_IGNORED_IN_GUI)
-		&& isLogicallyVisible();
+	Bool doAnimation = provideFeedback &&
+		newLevel > oldLevel &&
+		!isKindOf(KINDOF_IGNORED_IN_GUI) &&
+		isLogicallyVisible();
 
 	if (doAnimation)
 		createVeterancyLevelFX(oldLevel, newLevel);
@@ -2935,7 +2905,7 @@ void Object::createVeterancyLevelFX(VeterancyLevel oldLevel, VeterancyLevel newL
 			Anim2DTemplate *animTemplate = TheAnim2DCollection->findTemplate( TheGlobalData->m_levelGainAnimationName );
 
 			Coord3D pos = *getPosition();
-			pos.add(&m_healthBoxOffset);
+			pos.add(m_healthBoxOffset);
 
 			TheInGameUI->addWorldAnimation( animTemplate,
 																			&pos,
@@ -3122,7 +3092,7 @@ void Object::getHealthBoxPosition(Coord3D& pos) const
 {
 	pos = *getPosition();
 	pos.z += getGeometryInfo().getMaxHeightAbovePosition() + 10;
-	pos.add(&m_healthBoxOffset);
+	pos.add(m_healthBoxOffset);
 
 	// this needs to get moved to the mobspawnerupdate
 	if (isKindOf(KINDOF_MOB_NEXUS)) // quicker idiot test
@@ -3406,6 +3376,12 @@ void Object::friend_adjustPowerForPlayer( Bool incoming )
 //-------------------------------------------------------------------------------------------------
 void Object::onDisabledEdge(Bool becomingDisabled)
 {
+#if !(RTS_GENERALS && RETAIL_COMPATIBLE_CRC)
+	// rip through the behavior modules and call the onDisabledEdge for any modules that care
+	for( BehaviorModule **module = m_behaviors; *module; ++module )
+		(*module)->onDisabledEdge( becomingDisabled );
+#endif
+
 	Player* controller = getControllingPlayer();
 	// can be called during game teardown, thus controller can be null
 	if (controller)
@@ -3774,18 +3750,16 @@ void Object::xfer( Xfer *xfer )
 		// No, the contain module is just going to friend_ reach in and set this for us.
 		// Containers more complicated than Open (like Tunnel) can't do that.  Our variable,
 		// our responsibility.
-#if !RETAIL_COMPATIBLE_CRC
-		// TheSuperHackers @tweak Contained by ID is already set with retail compatibility; don't overwrite it.
 		if( xfer->getXferMode() == XFER_SAVE )
 		{
 			if( m_containedBy != nullptr )
-				m_containedByID = m_containedBy->getID();
+				m_xferContainedByID = m_containedBy->getID();
 			else
-				m_containedByID = INVALID_ID;
+				m_xferContainedByID = INVALID_ID;
 		}
-#endif
 
-		xfer->xferObjectID( &m_containedByID );
+
+		xfer->xferObjectID( &m_xferContainedByID );
 	}
 
 	// contained by frame
@@ -4010,8 +3984,8 @@ void Object::xfer( Xfer *xfer )
 //-------------------------------------------------------------------------------------------------
 void Object::loadPostProcess()
 {
-	if( m_containedByID != INVALID_ID )
-		m_containedBy = TheGameLogic->findObjectByID(m_containedByID);
+	if( m_xferContainedByID != INVALID_ID )
+		m_containedBy = TheGameLogic->findObjectByID(m_xferContainedByID);
 	else
 		m_containedBy = nullptr;
 
@@ -4196,6 +4170,7 @@ void Object::onDie( DamageInfo *damageInfo )
 	handlePartitionCellMaintenance();
 	if(m_team)
 		m_team->notifyTeamOfObjectDeath();
+#if RTS_GENERALS && RETAIL_COMPATIBLE_DATA
 	// Play death sound here.
 
 	AudioEventRTS deathSound = *getTemplate()->getSoundDie();
@@ -4217,6 +4192,7 @@ void Object::onDie( DamageInfo *damageInfo )
 	PlayerIndex index = getControllingPlayer() ? getControllingPlayer()->getPlayerIndex() : 0;
 	deathSound.setPlayerIndex( index );
 	TheAudio->addAudioEvent(&deathSound);
+#endif
 
 	if (isLocallyViewed() && !selfInflicted) // wasLocallyViewed? :-)
 	{
@@ -4493,9 +4469,9 @@ void Object::look()
 		// I removed the check for objects under construction by request of designers since
 		// they want constructing objects to have a reduced sight range now. -MW
 		// dead or blind things don't reveal shroud
-		if( ( ! isDestroyed() )// Some things get Destroyed directly without hitting Death.
-				&& ( ! isEffectivelyDead() )
-				&& ( getShroudClearingRange() > 0.0f )
+		if( ( ! isDestroyed() ) &&// Some things get Destroyed directly without hitting Death.
+				( ! isEffectivelyDead() ) &&
+				( getShroudClearingRange() > 0.0f )
 			)
 		{
 			PlayerMaskType lookingMask = 0;
@@ -5396,10 +5372,10 @@ Bool Object::canProduceUpgrade( const UpgradeTemplate *upgrade )
  	for( Int buttonIndex = 0; buttonIndex < MAX_COMMANDS_PER_SET; buttonIndex++ )
  	{
  		const CommandButton *button = set->getCommandButton(buttonIndex);
- 		if( button
-				&&  ( (button->getCommandType() == GUI_COMMAND_PLAYER_UPGRADE)  ||  (button->getCommandType() == GUI_COMMAND_OBJECT_UPGRADE) ) // Or else a button that requires an upgrade will appear the same as a button that gives an upgrade
-				&&  button->getUpgradeTemplate()
-				&&  (button->getUpgradeTemplate() == upgrade)
+ 		if( button &&
+				( (button->getCommandType() == GUI_COMMAND_PLAYER_UPGRADE)  ||  (button->getCommandType() == GUI_COMMAND_OBJECT_UPGRADE) ) && // Or else a button that requires an upgrade will appear the same as a button that gives an upgrade
+				button->getUpgradeTemplate() &&
+				(button->getUpgradeTemplate() == upgrade)
 				)
  			return TRUE; // getUpgradeTemplate only returns something if it is actually an upgrade
  	}
@@ -5602,11 +5578,7 @@ void Object::enterGroup( AIGroup *group )
 	// if we are in another group, remove ourselves from it first
 	leaveGroup();
 
-#if RETAIL_COMPATIBLE_AIGROUP
 	m_group = group;
-#else
-	m_group = AIGroupPtr::Create_AddRef(group);
-#endif
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5623,3 +5595,8 @@ void Object::leaveGroup()
 	}
 }
 
+//-------------------------------------------------------------------------------------------------
+Real Object::getCarrierDeckHeight() const
+{
+	return 0.0f;
+}

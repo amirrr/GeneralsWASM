@@ -17,11 +17,7 @@
 */
 
 #pragma once
-
-#include "WWDefines.h"
-
-// Note: Retail compatibility must not be broken before this project officially does.
-// Use RETAIL_COMPATIBLE_CRC and RETAIL_COMPATIBLE_XFER_SAVE to guard breaking changes.
+#include "WWLib/WWDefines.h"
 
 #ifndef PRESERVE_BUILDING_RESUMPTION_DELAY
 #define PRESERVE_BUILDING_RESUMPTION_DELAY (0) // The fix for this unfavorable behavior was approved by the Game Design Committee.
@@ -48,11 +44,11 @@
 #endif
 
 #ifndef PRESERVE_NO_XP_FROM_POISON_KILLS
-#define PRESERVE_NO_XP_FROM_POISON_KILLS (1)
+#define PRESERVE_NO_XP_FROM_POISON_KILLS (0) // The fix for this unfavorable behavior was approved by the Game Design Committee.
 #endif
 
 #ifndef PRESERVE_OCCUPANT_DETECTION_VIA_DRAG_SELECTION
-#define PRESERVE_OCCUPANT_DETECTION_VIA_DRAG_SELECTION (1)
+#define PRESERVE_OCCUPANT_DETECTION_VIA_DRAG_SELECTION (0) // The fix for this unfavorable behavior was approved by the Game Design Committee.
 #endif
 
 #ifndef PRESERVE_PERPETUAL_HORDE_BONUS
@@ -60,7 +56,7 @@
 #endif
 
 #ifndef PRESERVE_PREMATURE_BATTLE_BUS_DEATH
-#define PRESERVE_PREMATURE_BATTLE_BUS_DEATH (1)
+#define PRESERVE_PREMATURE_BATTLE_BUS_DEATH (0) // The fix for this unfavorable behavior was approved by the Game Design Committee.
 #endif
 
 #ifndef PRESERVE_RADAR_WARNING_SUPPRESSION
@@ -79,12 +75,37 @@
 #define PRESERVE_UNRELIABLE_FIRESTORMS (0) // The fix for this unfavorable behavior was approved by the Game Design Committee.
 #endif
 
+#ifndef PRESERVE_SNIPING_EMPTY_STINGER_SITES
+#define PRESERVE_SNIPING_EMPTY_STINGER_SITES (0) // The fix for this unfavorable behavior was approved by the Game Design Committee.
+#endif
+
 #ifndef PRESERVE_RETAIL_SCRIPTED_CAMERA
 #define PRESERVE_RETAIL_SCRIPTED_CAMERA (0) // Retain scripted camera behavior present in retail Generals 1.08 and Zero Hour 1.04
 #endif
 
+// GeneralsX @refactor stm 28/08/2026 Import the retail-particle compatibility switch.
+// Upstream PR: https://github.com/TheSuperHackers/GeneralsGameCode/pull/3172
+#ifndef PRESERVE_RETAIL_PARTICLES
+#define PRESERVE_RETAIL_PARTICLES (1) // Preserve original look of particles present in retail Generals 1.08 and Zero Hour 1.04
+#endif
+
+#ifndef PRESERVE_RETAIL_NUKE_MISSILE_OUTER_RADIUS_SEARCH
+#define PRESERVE_RETAIL_NUKE_MISSILE_OUTER_RADIUS_SEARCH (0) // The fix for this unfavorable behavior was approved by the Game Design Committee.
+#endif
+
+#ifndef PRESERVE_RETAIL_NUKE_MISSILE_OUTER_RADIUS_DAMAGE
+#define PRESERVE_RETAIL_NUKE_MISSILE_OUTER_RADIUS_DAMAGE (0) // The fix for this unfavorable behavior was approved by the Game Design Committee.
+#endif
+
+// Note: Retail compatibility must not be broken before this project officially does.
+// Use RETAIL_COMPATIBLE_CRC, RETAIL_COMPATIBLE_DATA and RETAIL_COMPATIBLE_XFER_SAVE to guard breaking changes.
+
 #ifndef RETAIL_COMPATIBLE_CRC
 #define RETAIL_COMPATIBLE_CRC (0) // Game is expected to be CRC compatible with retail Generals 1.08, Zero Hour 1.04
+#endif
+
+#ifndef RETAIL_COMPATIBLE_DATA
+#define RETAIL_COMPATIBLE_DATA (1) // Game and tool data files are expected to be compatible with retail Generals 1.08 and Zero Hour 1.04
 #endif
 
 #ifndef RETAIL_COMPATIBLE_XFER_SAVE
@@ -137,6 +158,11 @@
 // Buffered IO generally is much faster than unbuffered for small reads and writes.
 #ifndef USE_BUFFERED_IO
 #define USE_BUFFERED_IO (1)
+#endif
+
+// GeneralsX @feature Meeseeks 28/08/2026 Enable deep CRC memory buffer logging by default across all platforms including Windows
+#if (!defined(DEEP_CRC_TO_MEMORY) && !defined(DEBUG_CRC))
+#define DEEP_CRC_TO_MEMORY 1
 #endif
 
 // Enable cache for local file existence. Reduces amount of disk accesses for better performance,
