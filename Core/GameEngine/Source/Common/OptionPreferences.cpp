@@ -38,6 +38,7 @@
 #include "Common/OptionPreferences.h"
 
 #include "GameClient/ClientInstance.h"
+#include "GameClient/Display.h"
 #include "GameClient/LookAtXlat.h"
 #include "GameClient/Mouse.h"
 
@@ -239,6 +240,18 @@ Bool OptionPreferences::getDoubleClickAttackMoveEnabled()
 	return FALSE;
 }
 
+Int OptionPreferences::getJpegQuality() const
+{
+	OptionPreferences::const_iterator it = find("JpegQuality");
+	if (it == end())
+		return DEFAULT_JPEG_QUALITY;
+
+	// TheSuperHackers @info bobtista 14/07/2026 Clamp the quality to 50-95: above 95 the file
+	// size increases significantly with no visible benefit, below 50 the image degrades visibly.
+	const Int quality = atoi(it->second.str());
+	return clamp(50, quality, 95);
+}
+
 Real OptionPreferences::getScrollFactor()
 {
 	OptionPreferences::const_iterator it = find("ScrollFactor");
@@ -436,18 +449,6 @@ Int OptionPreferences::getStaticGameDetail()
 		return TheGameLODManager->getStaticLODLevel();
 
 	return TheGameLODManager->getStaticGameLODIndex(it->second);
-}
-
-Bool OptionPreferences::getSendDelay()
-{
-	OptionPreferences::const_iterator it = find("SendDelay");
-	if (it == end())
-		return TheGlobalData->m_firewallSendDelay;
-
-	if (stricmp(it->second.str(), "yes") == 0) {
-		return TRUE;
-	}
-	return FALSE;
 }
 
 Int OptionPreferences::getFirewallBehavior()
@@ -943,3 +944,40 @@ Real OptionPreferences::getTerrainDrawDistanceScale() const
 		val = 2.0f;
 	return val;
 }
+
+Real OptionPreferences::getGameWindowTransitionSpeedMultiplier() const
+{
+	OptionPreferences::const_iterator it = find("GameWindowTransitionSpeedMultiplier");
+	if (it == end())
+		return 1.0f;
+
+	Real speed = (Real) atof(it->second.str());
+	return clamp(1.0f, speed, 1000.0f);
+}
+
+// GeneralsX @feature felipebraz 17/09/2026 Skirmish simulation tick rate configuration (#281)
+Int OptionPreferences::getSkirmishTickRate() const
+{
+	OptionPreferences::const_iterator it = find("TickRate");
+	if (it == end())
+	{
+		it = find("GameSpeed");
+	}
+	if (it == end())
+	{
+		it = find("SkirmishTickRate");
+	}
+	if (it == end())
+	{
+		return LOGICFRAMES_PER_SECOND;
+	}
+
+	Int rate = atoi(it->second.str());
+	if (rate <= 0)
+	{
+		return LOGICFRAMES_PER_SECOND;
+	}
+
+	return clamp(5, rate, 120);
+}
+

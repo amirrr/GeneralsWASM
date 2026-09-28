@@ -81,6 +81,11 @@ ln -sf libSDL3_image.0.4.0.dylib "${RUNTIME_DIR}/libSDL3_image.dylib" 2>/dev/nul
 echo "  Copying GameSpy library..."
 cp -v "${GAMESPY_LIB}" "${RUNTIME_DIR}/"
 
+echo "  Copying GameNetworkingSockets library..."
+if [[ -f "${BUILD_DIR}/bin/libGameNetworkingSockets.dylib" ]]; then
+    cp -v "${BUILD_DIR}/bin/libGameNetworkingSockets.dylib" "${RUNTIME_DIR}/"
+fi
+
 echo "  Copying DXVK libraries (d3d9 + d3d8)..."
 # d3d8 links against d3d9 via @rpath — both must be present in the runtime dir
 if [[ ! -f "${DXVK_D3D9_LIB}" || ! -f "${DXVK_D3D8_LIB}" ]]; then
@@ -158,7 +163,14 @@ fi
 
 # GeneralsX @bugfix Copilot 24/03/2026 Deploy Fontconfig config into runtime dir so FreeType/Fontconfig can resolve fonts on macOS.
 # GeneralsX @bugfix BenderAI 24/03/2026 Guard Fontconfig conf.d copy so missing directory does not abort deploy under set -e.
-echo "  Deploying Fontconfig config..."
+echo "  Deploying Fontconfig config & fonts..."
+mkdir -p "${RUNTIME_DIR}/fonts"
+if [[ -d "${PROJECT_ROOT}/assets/fonts" ]]; then
+    cp -v "${PROJECT_ROOT}/assets/fonts"/*.ttf "${RUNTIME_DIR}/fonts/"
+    cp -v "${PROJECT_ROOT}/assets/fonts/LICENSE.liberation" "${RUNTIME_DIR}/fonts/"
+    cp -v "${PROJECT_ROOT}/assets/fonts/LICENSE.fontawesome" "${RUNTIME_DIR}/fonts/"
+fi
+
 if [[ -f "${FONTCONFIG_ETC_DIR}/fonts.conf" ]]; then
     mkdir -p "${RUNTIME_DIR}/fontconfig"
     cp -v "${FONTCONFIG_ETC_DIR}/fonts.conf" "${RUNTIME_DIR}/fontconfig/fonts.conf"
@@ -216,6 +228,11 @@ if [[ -f "\${SCRIPT_DIR}/fontconfig/fonts.conf" ]]; then
     export FONTCONFIG_PATH="\${SCRIPT_DIR}/fontconfig"
 fi
 
+# GeneralsX @bugfix felipebraz 12/07/2026 Default CNC_GENERALS_PATH to ~/GeneralsX/Generals if empty (Issue #205)
+if [[ -z "\${CNC_GENERALS_PATH:-}" ]]; then
+    export CNC_GENERALS_PATH="\${HOME}/GeneralsX/Generals"
+fi
+
 # Auto-detect base Generals install path
 if [[ -z "\${CNC_GENERALS_INSTALLPATH:-}" && -d "\${SCRIPT_DIR}/../Generals" ]]; then
     export CNC_GENERALS_INSTALLPATH="\${SCRIPT_DIR}/../Generals/"
@@ -227,7 +244,9 @@ fi
 # every loose INI / asset and only sees what is bundled inside the BIG files.
 cd "\${SCRIPT_DIR}"
 
-exec "./GeneralsXZH" "\$@"
+LOG_FILE="\${SCRIPT_DIR}/game.log"
+"./GeneralsXZH" "\$@" 2>&1 | grep --line-buffered -v "Unimplemented render state D3DRS_PATCHSEGMENTS" | grep --line-buffered -v "No accelerated colorspace conversion" | tee "\${LOG_FILE}"
+exit \${PIPESTATUS[0]}
 WRAPPER
 chmod +x "${RUNTIME_DIR}/run.sh"
 

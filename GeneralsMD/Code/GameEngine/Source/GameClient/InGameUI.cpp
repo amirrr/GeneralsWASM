@@ -163,13 +163,13 @@ static Bool kindOfUnitSelection( Drawable *test, void *userData )
 		Bool isKindOfMatch = object->isKindOfMulti(data->m_mustbeSet, data->m_mustbeClear);
 
 		// only select objects if not already selected
-		if( object && isKindOfMatch
-					&& object->isLocallyControlled()
-					&& !object->isContained()
-					&& !object->getDrawable()->isSelected()
-					&& !object->isEffectivelyDead()
-					&& object->isMassSelectable()
-					&& !object->isOffMap()
+		if( object && isKindOfMatch &&
+					object->isLocallyControlled() &&
+					!object->isContained() &&
+					!object->getDrawable()->isSelected() &&
+					!object->isEffectivelyDead() &&
+					object->isMassSelectable() &&
+					!object->isOffMap()
 				)
 		{
 			// enforce optional unit cap
@@ -223,12 +223,12 @@ static Bool similarUnitSelection( Drawable *test, void *userData )
 		}
 
 		// only select objects if not already selected
-		if( object && isEquivalent
-			  && object->isLocallyControlled()
-				&& !object->isContained()
-				&& !( object->getDrawable()->isSelected() )
-				&& object->isMassSelectable() // And only if they can be multiply selected. (otherwise the drawable will be, but the object will not be)
-				&& !object->isOffMap()
+		if( object && isEquivalent &&
+			  object->isLocallyControlled() &&
+				!object->isContained() &&
+				!( object->getDrawable()->isSelected() ) &&
+				object->isMassSelectable() && // And only if they can be multiply selected. (otherwise the drawable will be, but the object will not be)
+				!object->isOffMap()
 				)
 		{
 			// enforce optional unit cap
@@ -467,7 +467,7 @@ void InGameUI::xfer( Xfer *xfer )
 					xfer->xferBool(&swInfo->m_hiddenByScript);
 					xfer->xferBool(&swInfo->m_hiddenByScience);
 					xfer->xferBool(&swInfo->m_ready);
-          if ( currentVersion >= 3 )
+          if ( version >= 3 )
           {
             xfer->xferBool( &swInfo->m_evaReadyPlayed );
           }
@@ -514,7 +514,7 @@ void InGameUI::xfer( Xfer *xfer )
 			xfer->xferBool(&hiddenByScript);
 			xfer->xferBool(&hiddenByScience);
 			xfer->xferBool(&ready);
-      if ( currentVersion >= 3 )
+      if ( version >= 3 )
       {
         xfer->xferBool( &evaReadyPlayed );
       }
@@ -955,7 +955,21 @@ void INI::parseInGameUIDefinition( INI* ini )
 	{
 		// parse the ini weapon definition
 		ini->initFromINI( TheInGameUI, TheInGameUI->getFieldParse() );
+		TheInGameUI->validate();
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void InGameUI::validate()
+{
+#if ENABLE_GUI_HACKS
+	// TheSuperHackers @bugfix bobtista 02/09/2026 Correct the known retail InGameUI.ini message delay typo
+	if (m_messageDelayMS == 75000)
+	{
+		m_messageDelayMS = 7500;
+	}
+#endif
+	m_messageDelayMS = max(0, m_messageDelayMS);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1009,6 +1023,7 @@ void InGameUI::PlayerInfoList::init(const AsciiString &fontName, Int pointSize, 
 
 	labels[LabelType_Team]->setText(TheGameText->FETCH_OR_SUBSTITUTE_FORMAT("GUI:PlayerInfoListLabelTeam", L"T"));
 	labels[LabelType_Money]->setText(TheGameText->FETCH_OR_SUBSTITUTE_FORMAT("GUI:PlayerInfoListLabelMoney", L"$"));
+	labels[LabelType_MoneyPerMinute]->setText(TheGameText->FETCH_OR_SUBSTITUTE_FORMAT("GUI:PlayerInfoListLabelMoneyPerMinute", L"+"));
 	labels[LabelType_Rank]->setText(TheGameText->FETCH_OR_SUBSTITUTE_FORMAT("GUI:PlayerInfoListLabelRank", L"*"));
 	labels[LabelType_Xp]->setText(TheGameText->FETCH_OR_SUBSTITUTE_FORMAT("GUI:PlayerInfoListLabelXp", L"XP"));
 }
@@ -1889,7 +1904,8 @@ void InGameUI::update()
 	// frame
 	//
 	UnsignedInt currLogicFrame = TheGameLogic->getFrame();
-	const int messageTimeout = m_messageDelayMS / static_cast<float>(LOGICFRAMES_PER_SECOND) / 1000;
+	// TheSuperHackers @bugfix bobtista 13/08/2026 Convert milliseconds to logic frames
+	const int messageTimeout = REAL_TO_INT_CEIL( ConvertDurationFromMsecsToFrames( (Real)m_messageDelayMS ) );
 	UnsignedByte r, g, b, a;
 	Int amount;
 	for( i = MAX_UI_MESSAGES - 1; i >= 0; i-- )
@@ -3541,9 +3557,10 @@ void InGameUI::deselectDrawable( Drawable *draw )
 //-------------------------------------------------------------------------------------------------
 /** Clear all drawables' "select" status */
 //-------------------------------------------------------------------------------------------------
-void InGameUI::deselectAllDrawables( Bool postMsg )
+void InGameUI::deselectAllDrawables()
 {
 	const DrawableList *selected = getAllSelectedDrawables();
+	const Bool hadSelectedDrawables = !selected->empty();
 
 	// loop through all the selected drawables
 	for ( DrawableListCIt it = selected->begin(); it != selected->end(); )
@@ -3564,16 +3581,11 @@ void InGameUI::deselectAllDrawables( Bool postMsg )
 	// our selection can no longer consist of exactly one angry mob
 	m_soloNexusSelectedDrawableID = INVALID_DRAWABLE_ID;
 
-
-	///@todo don't we want to not emit this message if there wasn't a group at all? (CBD)
-	/** @todo also, we probably are sending this message too much, we should come up with
-	some kind of "selections are dirty" status that we can check once per frame and send
-	the correct group info over the network ... could be tricky tho (or impossible) given
-	the order of operations of things happening in the code (CBD) */
-	if( postMsg )
+	// TheSuperHackers @tweak Only send this message when objects were previously selected.
+	if (hadSelectedDrawables)
 	{
 		// TheSuperHackers @tweak Originally this message had one boolean argument, but it wasn't used for anything.
-		TheMessageStream->appendMessage( GameMessage::MSG_DESTROY_SELECTED_GROUP );
+		TheMessageStream->appendMessage(GameMessage::MSG_DESTROY_SELECTED_GROUP);
 	}
 }
 
@@ -4230,6 +4242,8 @@ void InGameUI::createReplayControl()
 // ------------------------------------------------------------------------------------------------
 void InGameUI::playMovie( const AsciiString& movieName )
 {
+	if (TheGlobalData->m_headless)
+		return;
 
 	stopMovie();
 
@@ -4285,6 +4299,8 @@ VideoBuffer* InGameUI::videoBuffer()
 // ------------------------------------------------------------------------------------------------
 void InGameUI::playCameoMovie( const AsciiString& movieName )
 {
+	if (TheGlobalData->m_headless)
+		return;
 
 	stopCameoMovie();
 
@@ -4672,8 +4688,8 @@ Bool InGameUI::canSelectedObjectsDoAction( ActionType action, const Object *obje
 			case ACTIONTYPE_REPAIR_OBJECT:
 			{
 				ObjectID currentRepairer = objectToInteractWith->getSoleHealingBenefactor();
-				success = ( TheActionManager->canRepairObject( other->getObject(), objectToInteractWith, CMD_FROM_PLAYER )
-										&& ( currentRepairer == INVALID_ID || currentRepairer == other->getObject()->getID() ) );
+				success = ( TheActionManager->canRepairObject( other->getObject(), objectToInteractWith, CMD_FROM_PLAYER ) &&
+										( currentRepairer == INVALID_ID || currentRepairer == other->getObject()->getID() ) );
 											// unless someone else is already healing it...
 											// please note that this add'l test is left out of canRepairObject() since canRepairObject
 											// gets called from within the Dozer/WorkerAIUpdates' stateMachines as they continue the repair process.
@@ -5445,9 +5461,9 @@ void InGameUI::drawFloatingText()
 		ThePartitionManager->worldToCell(ftd->m_pos3D.x, ftd->m_pos3D.y, &pCX, &pCY);
 
 		// translate it's 3d pos into a 2d screen pos
-		if( TheTacticalView->worldToScreen(&ftd->m_pos3D, &pos)
-			&& ftd->m_dString
-			&& ThePartitionManager->getShroudStatusForPlayer(playerIndex, pCX, pCY) == CELLSHROUD_CLEAR )
+		if( TheTacticalView->worldToScreen(&ftd->m_pos3D, &pos) &&
+			ftd->m_dString &&
+			ThePartitionManager->getShroudStatusForPlayer(playerIndex, pCX, pCY) == CELLSHROUD_CLEAR )
 		{
 			pos.y -= ftd->m_frameCount * m_floatingTextMoveUpSpeed;
 			Color dropColor;
@@ -5663,6 +5679,9 @@ static const UnsignedInt FRAMES_BEFORE_EXPIRE_TO_FADE = static_cast<float>(LOGIC
 // ------------------------------------------------------------------------------------------------
 void InGameUI::updateAndDrawWorldAnimations()
 {
+	// TheSuperHackers @tweak bobtista World animation Z-rise is now decoupled from the render update.
+	const Real zRiseTimeScale = TheFramePacer->getActualLogicTimeScaleOverFpsRatio();
+
 	// go through all animations
 	for( WorldAnimationListIterator it = m_worldAnimationList.begin();
 			 it != m_worldAnimationList.end(); /*empty*/ )
@@ -5671,31 +5690,27 @@ void InGameUI::updateAndDrawWorldAnimations()
 		// get data
 		WorldAnimationData *wad = *it;
 
-		// update portion ... only when the game is in motion
-		if( TheGameLogic->isGamePaused() == FALSE )
+		//
+		// see if it's time to expire this animation based on animation type and options or
+		// the expire frame
+		//
+		if( TheGameLogic->getFrame() >= wad->m_expireFrame ||
+				(BitIsSet( wad->m_options, WORLD_ANIM_PLAY_ONCE_AND_DESTROY ) &&
+				 BitIsSet( wad->m_anim->getStatus(), ANIM_2D_STATUS_COMPLETE )) )
 		{
 
-			//
-			// see if it's time to expire this animation based on animation type and options or
-			// the expire frame
-			//
-			if( TheGameLogic->getFrame() >= wad->m_expireFrame ||
-					(BitIsSet( wad->m_options, WORLD_ANIM_PLAY_ONCE_AND_DESTROY ) &&
-					 BitIsSet( wad->m_anim->getStatus(), ANIM_2D_STATUS_COMPLETE )) )
-			{
+			// delete this element and continue
+			deleteInstance(wad->m_anim);
+			delete wad;
+			it = m_worldAnimationList.erase( it );
+			continue;
 
-				// delete this element and continue
-				deleteInstance(wad->m_anim);
-				delete wad;
-				it = m_worldAnimationList.erase( it );
-				continue;
+		}
 
-			}
-
-			// update the Z value
-			if( wad->m_zRisePerSecond )
-				wad->m_worldPos.z += wad->m_zRisePerSecond / static_cast<float>(LOGICFRAMES_PER_SECOND);
-
+		// update the Z value
+		if( wad->m_zRisePerSecond )
+		{
+			wad->m_worldPos.z += wad->m_zRisePerSecond / LOGICFRAMES_PER_SECOND * zRiseTimeScale;
 		}
 
 		//
@@ -6273,19 +6288,17 @@ void InGameUI::drawPlayerInfoList()
 	const Int lineH = m_playerInfoList.labels[PlayerInfoList::LabelType_Team]->getFont()->height;
 	const Int columnGap = static_cast<Int>(lineH * (6.0f / 12.0f) + 0.5f);
 
-	AsciiString name;
 	UnicodeString playerInfoListValue;
 	Int rowCount = 0;
 	Int maxValueWidths[PlayerInfoList::LabelType_Count] = {0};
 	Color rowColors[MAX_PLAYER_COUNT] = {0};
 	Int nameValueWidth[MAX_PLAYER_COUNT] = {0};
+	const Bool showMoneyPerMinute = TheGlobalData->m_showMoneyPerMinute;
 	Int column;
 
 	for (Int slotIndex = 0; slotIndex < MAX_SLOTS && rowCount < MAX_PLAYER_COUNT; ++slotIndex)
 	{
-		name.format("player%d", slotIndex);
-		const NameKeyType key = TheNameKeyGenerator->nameToKey(name);
-		Player *player = ThePlayerList->findPlayerWithNameKey(key);
+		Player *player = ThePlayerList->getPlayerFromSlotIndex(slotIndex);
 		if (!player || player->isPlayerObserver())
 			continue;
 
@@ -6293,18 +6306,30 @@ void InGameUI::drawPlayerInfoList()
 
 		const Int row = rowCount++;
 		const UnsignedInt teamValue = (slot && slot->getTeamNumber() >= 0) ? static_cast<UnsignedInt>(slot->getTeamNumber() + 1) : 0;
-		const UnsignedInt moneyValue = player->getMoney()->countMoney();
+		const Money *money = player->getMoney();
+		const UnsignedInt moneyValue = money->countMoney();
+		const UnsignedInt moneyPerMinuteValue = money->getCashPerMinute();
 		const UnsignedInt rankValue = static_cast<UnsignedInt>(player->getRankLevel());
 		const UnsignedInt xpValue = static_cast<UnsignedInt>(player->getSkillPoints());
 		const UnicodeString nameValue = player->getPlayerDisplayName();
 
-		const UnsignedInt currentValues[] = {teamValue, moneyValue, rankValue, xpValue};
+		const UnsignedInt currentValues[] = {teamValue, moneyValue, moneyPerMinuteValue, rankValue, xpValue};
 		for (column = 0; column < ARRAY_SIZE(currentValues); ++column)
 		{
 			UnsignedInt &lastValue = m_playerInfoList.lastValues.values[column][row];
 			if (lastValue != currentValues[column])
 			{
-				playerInfoListValue.format(L"%u", currentValues[column]);
+				if (column == PlayerInfoList::ValueType_MoneyPerMinute)
+				{
+					if (!showMoneyPerMinute)
+						continue;
+
+					playerInfoListValue = formatIncomeValue(currentValues[column]);
+				}
+				else
+				{
+					playerInfoListValue.format(L"%u", currentValues[column]);
+				}
 				m_playerInfoList.values[column][row]->setText(playerInfoListValue);
 				lastValue = currentValues[column];
 			}
@@ -6331,6 +6356,9 @@ void InGameUI::drawPlayerInfoList()
 	Int labelX = baseX;
 	for (column = 0; column < PlayerInfoList::LabelType_Count; ++column)
 	{
+		if (column == PlayerInfoList::LabelType_MoneyPerMinute && !showMoneyPerMinute)
+			continue;
+
 		labelWidths[column] = m_playerInfoList.labels[column]->getWidth();
 		columnLabelX[column] = labelX;
 		labelX += labelWidths[column] + maxValueWidths[column] + columnGap;
@@ -6343,6 +6371,9 @@ void InGameUI::drawPlayerInfoList()
 
 		for (column = 0; column < PlayerInfoList::LabelType_Count; ++column)
 		{
+			if (column == PlayerInfoList::LabelType_MoneyPerMinute && !showMoneyPerMinute)
+				continue;
+
 			m_playerInfoList.labels[column]->draw(columnLabelX[column], drawY, m_playerInfoListLabelColor, m_playerInfoListDropColor);
 			m_playerInfoList.values[column][row]->draw(columnLabelX[column] + labelWidths[column], drawY, m_playerInfoListValueColor, m_playerInfoListDropColor);
 		}

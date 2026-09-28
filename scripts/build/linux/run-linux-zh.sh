@@ -94,6 +94,11 @@ if [[ -z "${ALSOFT_DRIVERS:-}" ]]; then
     echo "INFO: OpenAL: ALSOFT_DRIVERS=$ALSOFT_DRIVERS (pipewire excluded)"
 fi
 
+# GeneralsX @bugfix felipebraz 12/07/2026 Default CNC_GENERALS_PATH to ~/GeneralsX/Generals if empty (Issue #205)
+if [[ -z "${CNC_GENERALS_PATH:-}" ]]; then
+    export CNC_GENERALS_PATH="${HOME}/GeneralsX/Generals"
+fi
+
 # GeneralsX @feature felipebraz 18/02/2026 - Base Generals path and language are
 # auto-detected by the game from filesystem (ZH_Generals/ or ../Generals/).
 # Override by setting CNC_GENERALS_INSTALLPATH and/or CNC_ZH_LANGUAGE explicitly.
@@ -110,7 +115,8 @@ cd "${GAME_DIR}"
 mkdir -p logs
 
 # Launch with arguments (pass all script args to game)
-exec "${GAME_BINARY}" "$@" 2>&1 |tee "$LOG_FILE"
+"${GAME_BINARY}" "$@" 2>&1 | grep --line-buffered -v "Unimplemented render state D3DRS_PATCHSEGMENTS" | grep --line-buffered -v "No accelerated colorspace conversion" | tee "${LOG_FILE}"
+exit ${PIPESTATUS[0]}
 
 echo 
 echo "------------------------"

@@ -339,6 +339,13 @@ int main(int argc, char* argv[])
 			// Create SDL3 window with Vulkan support
 			fprintf(stderr, "INFO: Creating SDL3 Vulkan window...\n");
 			Uint32 windowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;  // Start hidden, show after D3D init
+#ifdef __APPLE__
+			// GeneralsX @bugfix macOS HiDPI: request a native-resolution (Retina) Metal drawable so the
+			// DXVK swapchain renders at physical pixels instead of being upscaled by the compositor.
+			// Requires NSHighResolutionCapable=true in the app bundle, the DXVK SDL3 WSI querying pixels
+			// (SDL_GetWindowSizeInPixels), and the density-aware pillarbox/mouse mapping in DX8Wrapper.
+			windowFlags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#endif
 			TheSDL3Window = SDL_CreateWindow(
 				"Command & Conquer Generals",
 				1024, 768,  // Default resolution
@@ -351,6 +358,25 @@ int main(int argc, char* argv[])
 				return 1;
 			}
 #endif // __EMSCRIPTEN__
+
+			// GeneralsX @bugfix Claude 11/08/2026 Multi-monitor: SDL_CreateWindow() takes no position and
+			// resolves to SDL_WINDOWPOS_UNDEFINED, which SDL maps to display index 0 of its own enumeration
+			// order — not necessarily the OS primary display. On multi-monitor setups the game could open on
+			// a secondary monitor, and fullscreen then inherited that same wrong display. Pin the initial
+			// placement to the primary display while the window is still hidden, so there is no visible jump.
+			{
+				const SDL_DisplayID primaryDisplay = SDL_GetPrimaryDisplay();
+				if (primaryDisplay != 0) {
+					const int centered = SDL_WINDOWPOS_CENTERED_DISPLAY(primaryDisplay);
+					if (!SDL_SetWindowPosition(TheSDL3Window, centered, centered)) {
+						// Wayland refuses programmatic positioning and lets the compositor place the window.
+						// Not fatal — the game is still usable, it just lands wherever the compositor decides.
+						fprintf(stderr, "WARNING: SDL_SetWindowPosition(primary display) failed: %s\n", SDL_GetError());
+					}
+				} else {
+					fprintf(stderr, "WARNING: SDL_GetPrimaryDisplay failed: %s\n", SDL_GetError());
+				}
+			}
 
 			// Store window handle globally (cast SDL_Window* to HWND for compatibility)
 			ApplicationHWnd = (HWND)TheSDL3Window;

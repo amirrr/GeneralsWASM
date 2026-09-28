@@ -10,6 +10,7 @@ option(RTS_BUILD_OPTION_ASAN "Build code with Address Sanitizer." OFF)
 option(RTS_BUILD_OPTION_VC6_FULL_DEBUG "Build VC6 with full debug info." OFF)
 option(RTS_BUILD_OPTION_FFMPEG "Enable FFmpeg support" OFF)
 option(RTS_WASM_SUPPRESS_WARNING_NOISE "Suppress high-volume non-fatal warnings in Emscripten builds" ON)
+option(RTS_BUILD_OPTION_DEEP_CRC "Enable deep CRC snapshots on sync mismatch" ON)
 
 # Linux/SDL3 and OpenAL options (Phase 1 Linux port)
 option(SAGE_USE_SDL3 "Use SDL3 for windowing/input (Linux/macOS)" OFF)
@@ -46,6 +47,7 @@ add_feature_info(AddressSanitizer RTS_BUILD_OPTION_ASAN "Building with address s
 add_feature_info(Vc6FullDebug RTS_BUILD_OPTION_VC6_FULL_DEBUG "Building VC6 with full debug info")
 add_feature_info(FFmpegSupport RTS_BUILD_OPTION_FFMPEG "Building with FFmpeg support")
 add_feature_info(WasmWarningNoiseSuppression RTS_WASM_SUPPRESS_WARNING_NOISE "Suppress noisy warnings in Emscripten builds")
+add_feature_info(DeepCRC RTS_BUILD_OPTION_DEEP_CRC "Enable deep CRC snapshots on sync mismatch")
 add_feature_info(SDL3Windowing SAGE_USE_SDL3 "Using SDL3 for windowing (Linux)")
 add_feature_info(OpenALAudio SAGE_USE_OPENAL "Using OpenAL for audio (Linux)")
 add_feature_info(UpdateCheck SAGE_UPDATE_CHECK "In-game update check via GitHub Releases API")
@@ -157,9 +159,26 @@ if(SAGE_UPDATE_CHECK)
     message(STATUS "In-game update checker enabled")
 endif()
 
+# GeneralsX @feature GeneralsOnline NGMP protocol option
+if(IS_VS6_BUILD)
+    option(SAGE_USE_NGMP "Use NGMP (GeneralsOnline) multiplayer protocol" OFF)
+else()
+    option(SAGE_USE_NGMP "Use NGMP (GeneralsOnline) multiplayer protocol" ON)
+endif()
+add_feature_info(NGMPProtocol SAGE_USE_NGMP "Using NGMP multiplayer protocol (GeneralsOnline)")
+
+if(SAGE_USE_NGMP)
+    target_compile_definitions(core_config INTERFACE SAGE_USE_NGMP)
+endif()
+
 if(SAGE_USE_GLM)
     target_compile_definitions(core_config INTERFACE SAGE_USE_GLM)
     message(STATUS "GLM math library enabled (DirectX 8 replacement)")
+endif()
+
+if(RTS_BUILD_OPTION_DEEP_CRC)
+    target_compile_definitions(core_config INTERFACE DEEP_CRC_TO_MEMORY=1)
+    message(STATUS "Deep CRC logging on sync mismatch enabled")
 endif()
 
 # macOS MoltenVK detection (Phase 5)
