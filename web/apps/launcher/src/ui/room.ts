@@ -10,6 +10,7 @@ export interface RoomPanel {
   readonly element: HTMLElement;
   setRoster(roster: readonly RosterEntry[]): void;
   setStatus(text: string): void;
+  setWarning(text: string | null): void;
   showJoinedState(roomId: string): void;
   showLobbyState(): void;
 }
@@ -117,6 +118,9 @@ export function createRoomPanel(container: HTMLElement, callbacks: RoomPanelCall
     },
     setStatus(text: string) {
       status.textContent = text;
+    },
+    setWarning(text: string | null) {
+      status.textContent = text ?? "";
     },
     showJoinedState(roomId: string) {
       lobby.hidden = true;
