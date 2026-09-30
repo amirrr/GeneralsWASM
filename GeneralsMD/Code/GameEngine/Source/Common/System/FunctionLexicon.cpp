@@ -115,15 +115,19 @@ static FunctionLexicon::TableEntry gameWinSystemTable[] =
 	{ NAMEKEY_INVALID, "WOLLadderScreenSystem",              (void*)WOLLadderScreenSystem },
 	{ NAMEKEY_INVALID, "WOLLoginMenuSystem",                 (void*)WOLLoginMenuSystem },
 	{ NAMEKEY_INVALID, "WOLLocaleSelectSystem",              (void*)WOLLocaleSelectSystem },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLLobbyMenuSystem",                 (void*)WOLLobbyMenuSystem },
 	{ NAMEKEY_INVALID, "WOLGameSetupMenuSystem",             (void*)WOLGameSetupMenuSystem },
 	{ NAMEKEY_INVALID, "WOLMapSelectMenuSystem",             (void*)WOLMapSelectMenuSystem },
+#endif
 	{ NAMEKEY_INVALID, "WOLBuddyOverlaySystem",              (void*)WOLBuddyOverlaySystem },
 	{ NAMEKEY_INVALID, "WOLBuddyOverlayRCMenuSystem",        (void*)WOLBuddyOverlayRCMenuSystem },
 	{ NAMEKEY_INVALID, "RCGameDetailsMenuSystem",            (void*)RCGameDetailsMenuSystem },
 	{ NAMEKEY_INVALID, "GameSpyPlayerInfoOverlaySystem",     (void*)GameSpyPlayerInfoOverlaySystem },
 	{ NAMEKEY_INVALID, "WOLMessageWindowSystem",             (void*)WOLMessageWindowSystem },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLQuickMatchMenuSystem",            (void*)WOLQuickMatchMenuSystem },
+#endif
 	{ NAMEKEY_INVALID, "WOLWelcomeMenuSystem",               (void*)WOLWelcomeMenuSystem },
 	{ NAMEKEY_INVALID, "WOLStatusMenuSystem",                (void*)WOLStatusMenuSystem },
 	{ NAMEKEY_INVALID, "WOLQMScoreScreenSystem",             (void*)WOLQMScoreScreenSystem },
@@ -189,13 +193,17 @@ static FunctionLexicon::TableEntry gameWinInputTable[] =
 	{ NAMEKEY_INVALID, "WOLLadderScreenInput",              (void*)WOLLadderScreenInput },
 	{ NAMEKEY_INVALID, "WOLLoginMenuInput",                 (void*)WOLLoginMenuInput },
 	{ NAMEKEY_INVALID, "WOLLocaleSelectInput",              (void*)WOLLocaleSelectInput },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLLobbyMenuInput",                 (void*)WOLLobbyMenuInput },
 	{ NAMEKEY_INVALID, "WOLGameSetupMenuInput",             (void*)WOLGameSetupMenuInput },
 	{ NAMEKEY_INVALID, "WOLMapSelectMenuInput",             (void*)WOLMapSelectMenuInput },
+#endif
 	{ NAMEKEY_INVALID, "WOLBuddyOverlayInput",              (void*)WOLBuddyOverlayInput },
 	{ NAMEKEY_INVALID, "GameSpyPlayerInfoOverlayInput",     (void*)GameSpyPlayerInfoOverlayInput },
 	{ NAMEKEY_INVALID, "WOLMessageWindowInput",             (void*)WOLMessageWindowInput },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLQuickMatchMenuInput",            (void*)WOLQuickMatchMenuInput },
+#endif
 	{ NAMEKEY_INVALID, "WOLWelcomeMenuInput",               (void*)WOLWelcomeMenuInput },
 	{ NAMEKEY_INVALID, "WOLStatusMenuInput",                (void*)WOLStatusMenuInput },
 	{ NAMEKEY_INVALID, "WOLQMScoreScreenInput",             (void*)WOLQMScoreScreenInput },
@@ -262,15 +270,19 @@ static FunctionLexicon::TableEntry winLayoutInitTable[] =
 	{ NAMEKEY_INVALID, "WOLLadderScreenInit",           (void*)WOLLadderScreenInit },
 	{ NAMEKEY_INVALID, "WOLLoginMenuInit",              (void*)WOLLoginMenuInit },
 	{ NAMEKEY_INVALID, "WOLLocaleSelectInit",           (void*)WOLLocaleSelectInit },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLLobbyMenuInit",              (void*)WOLLobbyMenuInit },
 	{ NAMEKEY_INVALID, "WOLGameSetupMenuInit",          (void*)WOLGameSetupMenuInit },
 	{ NAMEKEY_INVALID, "WOLMapSelectMenuInit",          (void*)WOLMapSelectMenuInit },
+#endif
 	{ NAMEKEY_INVALID, "WOLBuddyOverlayInit",           (void*)WOLBuddyOverlayInit },
 	{ NAMEKEY_INVALID, "WOLBuddyOverlayRCMenuInit",     (void*)WOLBuddyOverlayRCMenuInit },
 	{ NAMEKEY_INVALID, "RCGameDetailsMenuInit",         (void*)RCGameDetailsMenuInit },
 	{ NAMEKEY_INVALID, "GameSpyPlayerInfoOverlayInit",  (void*)GameSpyPlayerInfoOverlayInit },
 	{ NAMEKEY_INVALID, "WOLMessageWindowInit",          (void*)WOLMessageWindowInit },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLQuickMatchMenuInit",         (void*)WOLQuickMatchMenuInit },
+#endif
 	{ NAMEKEY_INVALID, "WOLWelcomeMenuInit",            (void*)WOLWelcomeMenuInit },
 	{ NAMEKEY_INVALID, "WOLStatusMenuInit",             (void*)WOLStatusMenuInit },
 	{ NAMEKEY_INVALID, "WOLQMScoreScreenInit",          (void*)WOLQMScoreScreenInit },
@@ -312,14 +324,20 @@ static FunctionLexicon::TableEntry winLayoutUpdateTable[] =
 	{ NAMEKEY_INVALID, "WOLLadderScreenUpdate",           (void*)WOLLadderScreenUpdate },
 	{ NAMEKEY_INVALID, "WOLLoginMenuUpdate",              (void*)WOLLoginMenuUpdate },
 	{ NAMEKEY_INVALID, "WOLLocaleSelectUpdate",           (void*)WOLLocaleSelectUpdate },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLLobbyMenuUpdate",              (void*)WOLLobbyMenuUpdate },
 	{ NAMEKEY_INVALID, "WOLGameSetupMenuUpdate",          (void*)WOLGameSetupMenuUpdate },
+#endif
 	{ NAMEKEY_INVALID, "PopupHostGameUpdate",             (void*)PopupHostGameUpdate },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLMapSelectMenuUpdate",          (void*)WOLMapSelectMenuUpdate },
+#endif
 	{ NAMEKEY_INVALID, "WOLBuddyOverlayUpdate",           (void*)WOLBuddyOverlayUpdate },
 	{ NAMEKEY_INVALID, "GameSpyPlayerInfoOverlayUpdate",  (void*)GameSpyPlayerInfoOverlayUpdate },
 	{ NAMEKEY_INVALID, "WOLMessageWindowUpdate",          (void*)WOLMessageWindowUpdate },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLQuickMatchMenuUpdate",         (void*)WOLQuickMatchMenuUpdate },
+#endif
 	{ NAMEKEY_INVALID, "WOLWelcomeMenuUpdate",            (void*)WOLWelcomeMenuUpdate },
 	{ NAMEKEY_INVALID, "WOLStatusMenuUpdate",             (void*)WOLStatusMenuUpdate },
 	{ NAMEKEY_INVALID, "WOLQMScoreScreenUpdate",          (void*)WOLQMScoreScreenUpdate },
@@ -355,13 +373,17 @@ static FunctionLexicon::TableEntry winLayoutShutdownTable[] =
 	{ NAMEKEY_INVALID, "WOLLadderScreenShutdown",           (void*)WOLLadderScreenShutdown },
 	{ NAMEKEY_INVALID, "WOLLoginMenuShutdown",              (void*)WOLLoginMenuShutdown },
 	{ NAMEKEY_INVALID, "WOLLocaleSelectShutdown",           (void*)WOLLocaleSelectShutdown },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLLobbyMenuShutdown",              (void*)WOLLobbyMenuShutdown },
 	{ NAMEKEY_INVALID, "WOLGameSetupMenuShutdown",          (void*)WOLGameSetupMenuShutdown },
 	{ NAMEKEY_INVALID, "WOLMapSelectMenuShutdown",          (void*)WOLMapSelectMenuShutdown },
+#endif
 	{ NAMEKEY_INVALID, "WOLBuddyOverlayShutdown",           (void*)WOLBuddyOverlayShutdown },
 	{ NAMEKEY_INVALID, "GameSpyPlayerInfoOverlayShutdown",  (void*)GameSpyPlayerInfoOverlayShutdown },
 	{ NAMEKEY_INVALID, "WOLMessageWindowShutdown",          (void*)WOLMessageWindowShutdown },
+#if defined(SAGE_USE_NGMP)
 	{ NAMEKEY_INVALID, "WOLQuickMatchMenuShutdown",         (void*)WOLQuickMatchMenuShutdown },
+#endif
 	{ NAMEKEY_INVALID, "WOLWelcomeMenuShutdown",            (void*)WOLWelcomeMenuShutdown },
 	{ NAMEKEY_INVALID, "WOLStatusMenuShutdown",             (void*)WOLStatusMenuShutdown },
 	{ NAMEKEY_INVALID, "WOLQMScoreScreenShutdown",          (void*)WOLQMScoreScreenShutdown },

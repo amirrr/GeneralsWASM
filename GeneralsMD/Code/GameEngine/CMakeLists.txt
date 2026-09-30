@@ -767,15 +767,11 @@ set(GAMEENGINE_SRC
     Source/GameClient/GUI/GUICallbacks/Menus/SkirmishMapSelectMenu.cpp
     Source/GameClient/GUI/GUICallbacks/Menus/WOLBuddyOverlay.cpp
     Source/GameClient/GUI/GUICallbacks/Menus/WOLCustomScoreScreen.cpp
-    Source/GameClient/GUI/GUICallbacks/Menus/WOLGameSetupMenu.cpp
     Source/GameClient/GUI/GUICallbacks/Menus/WOLLadderScreen.cpp
-    Source/GameClient/GUI/GUICallbacks/Menus/WOLLobbyMenu.cpp
     Source/GameClient/GUI/GUICallbacks/Menus/WOLLocaleSelectPopup.cpp
     Source/GameClient/GUI/GUICallbacks/Menus/WOLLoginMenu.cpp
-    Source/GameClient/GUI/GUICallbacks/Menus/WOLMapSelectMenu.cpp
     Source/GameClient/GUI/GUICallbacks/Menus/WOLMessageWindow.cpp
     Source/GameClient/GUI/GUICallbacks/Menus/WOLQMScoreScreen.cpp
-    Source/GameClient/GUI/GUICallbacks/Menus/WOLQuickMatchMenu.cpp
     Source/GameClient/GUI/GUICallbacks/Menus/WOLStatusMenu.cpp
     Source/GameClient/GUI/GUICallbacks/Menus/WOLWelcomeMenu.cpp
 #    Source/GameClient/GUI/GUICallbacks/MessageBox.cpp
@@ -1174,6 +1170,10 @@ if(SAGE_USE_NGMP)
         Source/GameNetwork/GeneralsOnline/NGMP_Helpers.cpp
         Source/GameNetwork/GeneralsOnline/NetworkMesh.cpp
         Source/GameNetwork/GeneralsOnline/NextGenTransport.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLGameSetupMenu.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLLobbyMenu.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLMapSelectMenu.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLQuickMatchMenu.cpp
     )
 endif()
 

@@ -770,7 +770,8 @@ void MainMenuShutdown( WindowLayout *layout, void *userData )
 //		localAnimateWindowManager->reverseAnimateWindow();
 }
 
-extern Bool DontShowMainMenu;
+// GeneralsX @build Copilot 30/09/2026 Defined here so builds without NGMP (no WOLLobbyMenu.cpp) still link.
+Bool DontShowMainMenu = FALSE;
 
 ////////////////////////////////////////////////////////////////////////////
 //Allows the user to confirm the change, goes back to the previous mode
