@@ -1686,7 +1686,7 @@ Type scanType(std::string_view token)
         {
 				// GeneralsX @bugfix BenderAI 07/04/2026 Apple SDKs in our deployment target do not expose std::from_chars for floats.
 				// GeneralsX @bugfix GitHubCopilot 07/07/2026 Emscripten libc++ in this toolchain also lacks floating-point from_chars.
-				#if defined(__APPLE__) || defined(EMSCRIPTEN)
+				#if defined(__APPLE__) || defined(__EMSCRIPTEN__)
                 const std::string tokenString(token);
                 char *end = nullptr;
                 errno = 0;
